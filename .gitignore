@@ -1,0 +1,5 @@
+node_modules/
+.next/
+contracts/artifacts/
+contracts/cache/
+.env
