@@ -1,38 +1,79 @@
 # Verified Contribution Ledger (MVP)
 
-## What we build, in plain words
+## What we built, in plain words
 
-<img width="2816" height="1536" alt="Gemini_Generated_Image_5aj7yv5aj7yv5aj7" src="https://github.com/user-attachments/assets/25db3164-bc36-4526-be46-b689b04b0ab9" />
+<img width="2816" height="1536" alt="Illustration: a programmer's work is sealed by a company, stored in an unbreakable chain of blocks, and publicly verified" src="https://github.com/user-attachments/assets/25db3164-bc36-4526-be46-b689b04b0ab9" />
 
-Imagine a public notice board that nobody can erase or edit. Companies can pin notes on it saying "this person did this piece of work, and we vouch for it." Anyone in the world can later look at a note and confirm: yes, it's really there, and yes, it was pinned by a real, approved company. That's the whole idea — we built it on a blockchain because a blockchain is exactly that kind of tamper-proof notice board.
+The story in the picture is the whole system:
 
-One important design choice: the blockchain doesn't judge whether the work claim is true. It only proves who said it and when. Trust comes from the company's signature, not from the chain.
+1. **Someone does real work.** A programmer ships a feature, fixes an outage,
+   mentors a teammate. The evidence lives in private systems — Jira tickets,
+   pull requests, internal docs.
+2. **The company vouches for it.** Like pressing a signet ring into wax, an
+   authorized company wallet signs a record: "this person did this work, and
+   we stand behind that claim." The private evidence stays locked away — only
+   its *fingerprint* (a hash) goes onto the record.
+3. **The record goes into an unbreakable wall.** The signed record is added to
+   a public chain of blocks that nobody — not even the company — can edit or
+   erase afterwards. There is no delete button, on purpose.
+4. **Anyone can check it.** Years later, a recruiter, an investor, or the
+   employee themselves can look at the record and confirm: it exists, it was
+   signed by a genuinely authorized company, and — if shown the original
+   evidence — that the evidence matches the fingerprint exactly.
 
-The three pieces
+One important design choice: the blockchain doesn't judge whether the work
+claim is *true*. It only proves *who said it and when*. Trust comes from the
+company's signature, not from the chain.
 
-1. The smart contract (contracts/ContributionLedger.sol) — a small program written in Solidity that lives on the blockchain. It's the notice board itself. Its rules:
-  - One admin account decides which company wallets are allowed to pin notes.
-  - An authorized company can record a contribution: who (a hashed employee ID), which company, what type of work, and a fingerprint (hash) of the private evidence.
-  - There is deliberately no "edit" or "delete" function — that's what makes records immutable.
-  - Anyone can read and verify any record, no permission needed.
+**Why bother?** Today your track record is trapped inside each employer —
+when you leave, your verified history leaves with them. A portable,
+tamper-proof ledger of vouched-for contributions is the foundation for
+whatever you build on top: reputation, references, or eventually
+compensation tied to verified contribution (the golden slice in the picture —
+deliberately *not* built in this MVP, see out-of-scope below).
 
-2. The privacy trick (hashing) — we never put real emails or Jira tickets on the public chain. Instead we store a hash: a fingerprint computed from the text. You can't reverse a fingerprint back into the text, but if someone later shows you the original text, you can re-compute the fingerprint and confirm it matches. So evidence stays private, yet remains provable.
+### The three pieces
 
-3. The website (web/) — a small Next.js app with three pages:
-  - Issue — a company connects its wallet (MetaMask) and records a contribution.
-  - Employee — type an employee identifier, see their full history.
-  - Verify — type a record's ID, and optionally paste the evidence text, to publicly confirm the record exists, who signed it, and that the evidence matches. Works without any wallet.
+1. **The smart contract** (`contracts/ContributionLedger.sol`) — a small
+   program written in Solidity that lives on the blockchain. It's the wall of
+   blocks itself. Its rules:
+   - One admin account decides which company wallets are allowed to issue records.
+   - An authorized company records a contribution: who (a hashed employee ID),
+     which company, what type of work, and the fingerprint (hash) of the
+     private evidence.
+   - There is deliberately no "edit" or "delete" function — that's what makes
+     records immutable.
+   - Anyone can read and verify any record, no permission needed.
 
-### How we know it works:
+2. **The privacy trick (hashing)** — we never put real emails or Jira tickets
+   on the public chain. A hash is a one-way fingerprint: you can't reverse it
+   back into the text, but if someone later shows you the original text, you
+   can re-compute the fingerprint and confirm it matches. Evidence stays
+   private, yet remains provable.
 
-We wrote automated tests for the contract (4 tests: authorization rules, issuing, lookups, and that revoking a company blocks new records but keeps old ones), ran a full end-to-end test against a local blockchain, and confirmed the website builds. Then we committed everything and pushed it to GitHub with a README containing complete step-by-step run instructions.
+3. **The website** (`web/`) — a small Next.js app with three pages:
+   - **Issue** — a company connects its wallet (MetaMask) and records a contribution.
+   - **Employee** — type an employee identifier, see their full history.
+   - **Verify** — type a record's ID, and optionally paste the evidence text,
+     to publicly confirm the record exists, who signed it, and that the
+     evidence matches. Works without any wallet.
 
-### Words you'll keep seeing:
+### How we know it works
 
-  - Wallet — your identity on the blockchain; an account that can sign things (MetaMask is the browser app that holds it).
-  - Smart contract — a program deployed onto the blockchain; its code and data are public and its rules can't be quietly changed.
-  - Hardhat — the developer toolkit we used: it compiles Solidity, runs tests, and gives you a throwaway blockchain on your own machine for free experimentation.
-  - Hash — the one-way fingerprint of some data, used here for privacy.
+Automated contract tests (authorization rules, issuing, lookups, and that
+revoking a company blocks new records but keeps old ones), a full end-to-end
+test against a local blockchain, and a clean website build.
+
+### Words you'll keep seeing
+
+- **Wallet** — your identity on the blockchain; an account that can sign
+  things (MetaMask is the browser app that holds it).
+- **Smart contract** — a program deployed onto the blockchain; its code and
+  data are public and its rules can't be quietly changed.
+- **Hardhat** — the developer toolkit we used: it compiles Solidity, runs
+  tests, and gives you a throwaway blockchain on your own machine for free
+  experimentation.
+- **Hash** — the one-way fingerprint of some data, used here for privacy.
 
 ## TL;DR
 
