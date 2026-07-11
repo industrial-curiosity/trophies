@@ -2,6 +2,8 @@
 
 ## What we built, in plain words
 
+<img width="2816" height="1536" alt="Gemini_Generated_Image_4j65rm4j65rm4j65" src="https://github.com/user-attachments/assets/1a9508d4-3065-41c3-a3ff-e0bd16d71ba7" />
+
 Imagine a public notice board that nobody can erase or edit. Companies can pin notes on it saying "this person did this piece of work, and we vouch for it." Anyone in the world can later look at a note and confirm: yes, it's really there, and yes, it was pinned by a real, approved company. That's the whole idea — we built it on a blockchain because a blockchain is exactly that kind of tamper-proof notice board.
 
 One important design choice: the blockchain doesn't judge whether the work claim is true. It only proves who said it and when. Trust comes from the company's signature, not from the chain.
