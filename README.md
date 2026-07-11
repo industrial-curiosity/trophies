@@ -1,8 +1,8 @@
 # Verified Contribution Ledger (MVP)
 
-<img width="2816" height="1536" alt="Gemini_Generated_Image_4j65rm4j65rm4j65" src="https://github.com/user-attachments/assets/1a9508d4-3065-41c3-a3ff-e0bd16d71ba7" />
+## What we build, in plain words
 
-## What we built, in plain words
+<img width="2816" height="1536" alt="Gemini_Generated_Image_5aj7yv5aj7yv5aj7" src="https://github.com/user-attachments/assets/25db3164-bc36-4526-be46-b689b04b0ab9" />
 
 Imagine a public notice board that nobody can erase or edit. Companies can pin notes on it saying "this person did this piece of work, and we vouch for it." Anyone in the world can later look at a note and confirm: yes, it's really there, and yes, it was pinned by a real, approved company. That's the whole idea — we built it on a blockchain because a blockchain is exactly that kind of tamper-proof notice board.
 
