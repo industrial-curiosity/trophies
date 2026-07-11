@@ -9,28 +9,28 @@ One important design choice: the blockchain doesn't judge whether the work claim
 The three pieces
 
 1. The smart contract (contracts/ContributionLedger.sol) — a small program written in Solidity that lives on the blockchain. It's the notice board itself. Its rules:
-- One admin account decides which company wallets are allowed to pin notes.
-- An authorized company can record a contribution: who (a hashed employee ID), which company, what type of work, and a fingerprint (hash) of the private evidence.
-- There is deliberately no "edit" or "delete" function — that's what makes records immutable.
-- Anyone can read and verify any record, no permission needed.
+  - One admin account decides which company wallets are allowed to pin notes.
+  - An authorized company can record a contribution: who (a hashed employee ID), which company, what type of work, and a fingerprint (hash) of the private evidence.
+  - There is deliberately no "edit" or "delete" function — that's what makes records immutable.
+  - Anyone can read and verify any record, no permission needed.
 
 2. The privacy trick (hashing) — we never put real emails or Jira tickets on the public chain. Instead we store a hash: a fingerprint computed from the text. You can't reverse a fingerprint back into the text, but if someone later shows you the original text, you can re-compute the fingerprint and confirm it matches. So evidence stays private, yet remains provable.
 
 3. The website (web/) — a small Next.js app with three pages:
-- Issue — a company connects its wallet (MetaMask) and records a contribution.
-- Employee — type an employee identifier, see their full history.
-- Verify — type a record's ID, and optionally paste the evidence text, to publicly confirm the record exists, who signed it, and that the evidence matches. Works without any wallet.
+  - Issue — a company connects its wallet (MetaMask) and records a contribution.
+  - Employee — type an employee identifier, see their full history.
+  - Verify — type a record's ID, and optionally paste the evidence text, to publicly confirm the record exists, who signed it, and that the evidence matches. Works without any wallet.
 
-How we know it works
+### How we know it works:
 
 We wrote automated tests for the contract (4 tests: authorization rules, issuing, lookups, and that revoking a company blocks new records but keeps old ones), ran a full end-to-end test against a local blockchain, and confirmed the website builds. Then we committed everything and pushed it to GitHub with a README containing complete step-by-step run instructions.
 
-Words you'll keep seeing
+### Words you'll keep seeing:
 
-- Wallet — your identity on the blockchain; an account that can sign things (MetaMask is the browser app that holds it).
-- Smart contract — a program deployed onto the blockchain; its code and data are public and its rules can't be quietly changed.
-- Hardhat — the developer toolkit we used: it compiles Solidity, runs tests, and gives you a throwaway blockchain on your own machine for free experimentation.
-- Hash — the one-way fingerprint of some data, used here for privacy.
+  - Wallet — your identity on the blockchain; an account that can sign things (MetaMask is the browser app that holds it).
+  - Smart contract — a program deployed onto the blockchain; its code and data are public and its rules can't be quietly changed.
+  - Hardhat — the developer toolkit we used: it compiles Solidity, runs tests, and gives you a throwaway blockchain on your own machine for free experimentation.
+  - Hash — the one-way fingerprint of some data, used here for privacy.
 
 ## TL;DR
 
