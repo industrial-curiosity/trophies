@@ -7,6 +7,9 @@ context: |
   embedded contracts are illustrative, untested starting points, not production
   implementations. Fee benchmarks are unverified estimates, not acceptance criteria.
 
+  Guiding principle: prefer simplicity and fewer moving parts or points of failure,
+  while preserving safety and correctness. Justify added infrastructure or abstractions.
+
   Required blockchain targets:
   - Base Sepolia and Base mainnet.
   - opBNB Testnet and opBNB mainnet.
@@ -21,12 +24,19 @@ context: |
   respecting EVM and Sui differences in ownership, authorization, and execution.
   No cross-chain bridge or synchronized accounting has been requested; treat
   deployment state and assets as network-local unless explicitly specified.
-  Build tools, dependency versions, repository layout, and upgrade strategy
-  remain undecided; establish them in the relevant change design.
+  Deployments are immutable: no proxy upgrades or retained Sui upgrade authority.
+  Build tools, dependency versions, and repository layout remain undecided;
+  establish them in the relevant change design.
 
   Core behavior:
-  - Managers register projects and authorize issuance of project shares.
-  - Shares support fractional ownership and transfers with explicit fixed-point units.
+  - Managers register projects and authorize unlimited additional share issuance
+    forever, without a product supply cap or permanent issuance closure. New
+    shares dilute future rewards; finite arithmetic limits still apply.
+  - Trophies are fungible within each project. Record generation metadata and
+    issuance history on-chain at minting: description, issuer, recipient, quantity,
+    and external reference. No per-unit identity or ongoing provenance is required.
+  - Shares use 18 decimal places: one full trophy is 10^18 base units.
+    Burning or manager revocation of shares is not allowed.
   - Donations increase a per-project cumulative reward-per-share index in O(1)
     work with respect to holder count, without iterating over holders.
   - Newly issued shares receive no entitlement to donations preceding issuance.
@@ -35,19 +45,30 @@ context: |
     newly acquired shares. Define which operations exist per implementation.
   - Claims must verify project/share association and authorized entitlement;
     accounting and custody must isolate projects and supported donation assets.
-  - Native assets and stablecoins are product goals. Initial supported assets
-    and multi-asset accounting must be explicitly selected in change artifacts.
+  - Support multiple funding assets without a product-level one-asset restriction.
+    Define token compatibility, asset registration, and per-asset accounting.
+  - Transfers preserve past earnings for the seller's wallet as withdrawable
+    entitlement, even after transferring all shares. No automatic payout occurs.
+    Recipients earn only on their own holdings at each donation; preserve existing
+    recipient entitlements and fractional remainders through balance changes.
+  - Holder claims do not expire; managers cannot withdraw funds owed to holders.
+  - Platform owner fee: flat 0.5% (50 basis points) of donations, with no cap
+    or USD valuation requirement. Fee denomination and rounding need design.
+  - Managers can pause minting, donations, and transfers for their own projects,
+    but cannot pause withdrawals.
+  - The contract owner has emergency controls over all projects, including
+    withdrawals. Pause enforcement must preserve balances and claim entitlements;
+    owner controls do not imply authority to confiscate holder funds.
   - Gasless means sponsored cost to the end user, not zero network cost.
     Sponsorship requires an actual paymaster or Sui sponsor integration; a
     contract gas-pool balance alone does not implement sponsorship.
 
-  Decisions still requiring design: share precision, transfer settlement versus
-  retained claim credits, rounding and dust policy, supported donation assets,
-  sponsorship funding and budget controls, permissions, and contract lifecycle.
+  Decisions still requiring design: rounding and dust policy, multi-asset token
+  compatibility and scalable entitlement accounting, generation metadata encoding,
+  fee denomination and collection, sponsorship funding and budget controls, and
+  the scope and granularity of contract-owner emergency controls.
   Define event/transaction ordering precisely; do not assume a block boundary
   alone determines entitlement between operations within the same block.
-  The overview's fractional-transfer example must be reconciled with its earlier
-  balances before being used as an expected payout test.
 
   Current scope is blockchain contracts, tooling, tests, and deployment preparation.
   Frontend architecture and hosting discussions are paused; no frontend stack
@@ -70,6 +91,7 @@ rules:
     - Cover no retroactive rewards, preservation of accrued entitlement, and conservation of funds under the stated rounding policy.
     - Include unauthorized operations, cross-project misuse, invalid amounts, zero-share donations, and payout failures where relevant.
     - Identify applicable chains and document any intentional behavioral differences.
+    - Cover retained seller entitlements after full transfer, the 0.5% fee, no burning, and manager versus owner pause permissions.
   tasks:
     - Include verification for both Solidity and Move when common contract behavior changes.
     - Include accounting boundary tests, adversarial transaction sequences, and conservation properties for contract changes.

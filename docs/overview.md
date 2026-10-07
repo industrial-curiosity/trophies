@@ -2,49 +2,91 @@
 
 ## 1. Executive Summary & Core Mechanics
 
+### Guiding principle and product decisions
+
+Prefer simplicity and fewer moving parts or points of failure while preserving
+safety and correctness. Target Base, opBNB, and Sui, each on its testnet and
+mainnet, with independent network-local accounting.
+
+- Trophies are fungible within a project. Record generation metadata and issuance
+  history on-chain when minting; no per-unit identity or ongoing provenance is required.
+  Each generation records description, issuer, recipient, quantity, and external
+  reference. Encoding and storage format remain to be designed.
+- Project managers can issue unlimited additional shares forever. There is no
+  product supply cap or permanent issuance closure; finite integer bounds still
+  apply. New shares dilute future distributions and never earn earlier donations.
+- Shares use 18 decimal places: one full trophy is 10^18 base units.
+  Burning and manager revocation are not allowed.
+- Transfers retain previously earned dividends for the seller's wallet without
+  automatically paying them. Entitlements remain claimable after transferring all
+  shares. Recipients do not acquire the seller's past earnings. Preserve existing
+  recipient entitlements and fractional remainders through balance changes.
+- Support multiple funding assets without a product-level one-asset restriction.
+  Asset compatibility, registration, and settlement mechanics remain open; arbitrary
+  token behavior cannot be assumed to support correct accounting or reliable payouts.
+- The platform owner receives a flat 0.5% (50 basis points) of donated funds.
+  There is no maximum fee or USD pricing requirement. Fee denomination, rounding,
+  and collection mechanics remain to be designed.
+- Holder entitlements do not expire. Undistributable dust may remain in the vault;
+  project managers cannot withdraw money owed to holders.
+- Project managers can pause minting, donations, and transfers within their own
+  projects, but cannot pause withdrawals.
+- The contract owner has emergency controls over all projects, including
+  withdrawals. Pauses preserve accrued entitlements; these controls do not grant
+  authority to confiscate holder funds. Owner-control granularity remains open.
+- Deployments are immutable: no proxy upgrades or retained Sui upgrade authority.
+  Fixes require replacement deployments and any necessary migration.
+- Sponsorship funding and budget mechanics remain open. Frontend work is paused.
+
 This specification details the architecture for a decentralized project registry smart contract. Project managers can register their projects and generate/mint project shares (tokens) at sub-penny or zero-gas cost to end-users. Donors deposit funds (native assets or stablecoins) into the registry, which are immediately and strictly allocated to existing project token holders using an \\(O(1)\\) constant-time checkpointed dividend algorithm.
 
 **Key System Highlights**:
+
 * **\\(O(1)\\) Scaled Share Algorithm**: Prevents block gas limit failures by eliminating iteration loops during donation deposits. Donations update a global multiplier in a single step regardless of whether 2 or 20,000 token holders exist.
-* **Strict Block Checkpointing**: Newly generated tokens created after a donation event receive exactly \$0.00 from past donations.
-* **Fractional Token & Ownership Transfers**: Supports partial transfers (e.g., 0.5 shares) while preserving or settling accumulated withdrawal eligibility.
-* **Gasless Project Top-Up Vault**: Allows project managers to prepay a native gas pool in the contract, enabling sponsored token generation for users via native Account Abstraction or Sui Sponsored Transactions.
+* **Transaction-Ordered Checkpointing**: Newly generated tokens created after a donation event receive exactly \$0.00 from past donations.
+* **Fractional Token & Ownership Transfers**: Supports partial transfers (e.g., 0.5 shares) while preserving the seller's accumulated withdrawal eligibility without an automatic payout.
+* **Gasless Project Top-Up Vault**: Intended to let project managers fund sponsored token generation. A funded balance alone is insufficient; an actual EVM paymaster or Sui sponsor integration is required.
 
 ---
 
 ## 2. Architecture & Step-by-Step Lifecycle
 
 ### Global State Variables
-* `accumulated_reward_per_share`: Running global index tracking cumulative donation dollars allocated per full share (\\(O(1)\\) constant time).
+
+* `accumulated_reward_per_share`: Per-project, per-asset index tracking cumulative net donations allocated per full share (\\(O(1)\\) constant time).
 * `total_shares`: Aggregate count of active shares/tokens for a given project.
 * `entry_marker`: Per-token or per-user index recording the `accumulated_reward_per_share` at the time of token acquisition or last withdrawal.
 
-### Step-by-Step Operational Example
-1. **Day 1 (\$5,000 Donation, 2 Shares)**:
-   * Tokens #1 and #2 exist.
-   * Donor sends \$5,000. Contract calculates: `$5,000 / 2 shares = $2,500 / share`.
-   * Global Index increases from \$0 to **\$2,500**.
-   * Token #1 Claimable: `$2,500 - $0 = $2,500`.
-   * Token #2 Claimable: `$2,500 - $0 = $2,500`.
-2. **Day 2 (Token #3 Minted)**:
-   * Project manager generates Token #3.
-   * `total_shares` increases to 3.
-   * Token #3 is assigned an `entry_marker` equal to current Global Index (**\$2,500**).
-   * Token #3 Claimable from Day 1 donation: `$2,500 - $2,500 = $0`.
-3. **Day 3 (\$3,000 Second Donation, 3 Shares)**:
-   * Donor sends \$3,000. Contract calculates: `$3,000 / 3 shares = $1,000 / share`.
-   * Global Index increases from \$2,500 to **\$3,500** (`$2,500 + $1,000`).
-   * Token #1 Claimable: `$3,500 - $0 = $3,500`.
-   * Token #2 Claimable: `$3,500 - $0 = $3,500`.
-   * Token #3 Claimable: `$3,500 - $2,500 = $1,000`.
-4. **Fractional Token Transfer (0.5 Shares transferred)**:
-   * Owner transfers 0.5 shares to new user.
-   * Contract executes auto-claim hook: original owner receives \$500 (`0.5 * $1,000`).
-   * Transferred 0.5 share gets updated `entry_marker` = **\$3,500** (starts at \$0 for future donations).
+### Step-by-Step Operational Example (net distributable amounts, one asset)
+
+Amounts below are donation-asset units after the platform fee. Shares are shown
+as full trophies for readability; on-chain balances use 18 decimal places.
+
+1. Alice and Bob each hold one share. A net donation of 5,000 asset units gives
+   each an entitlement of 2,500 units.
+2. The manager mints one share to Carol. Supply becomes three shares. Carol has
+   no entitlement to the earlier donation; Alice and Bob retain theirs.
+3. A net donation of 3,000 units adds 1,000 units per share. Alice and Bob can
+   each claim 3,500 units; Carol can claim 1,000 units.
+4. Carol transfers 0.5 shares to Dave. No donation funds move. Carol keeps her
+   1,000-unit entitlement and 0.5 shares. Dave receives 0.5 shares and no past
+   entitlement. Even if Carol later transfers her remaining shares, her earned
+   amount remains claimable by her wallet.
+5. A net donation of 600 units adds 200 units per full share. Alice and Bob each
+   earn 200 units, while Carol and Dave each earn 100 units. Carol can now claim
+   1,100 units and Dave can claim 100 units, subject to withdrawal pause controls.
 
 ---
 
-## 3. Production Code Implementations
+## 3. Historical Illustrative Code (not production-ready)
+
+These untested snippets predate the current product decisions. They do not implement
+the multi-asset funding policy, platform fees, generation metadata, emergency
+controls, retained seller entitlements, or immutable deployment setup. The Sui
+example does not enforce project/share association on claims. The Solidity example
+automatically pays during transfers and fails to initialize new recipients correctly.
+Neither snippet implements actual gas sponsorship. Use these only as historical
+algorithm sketches, not implementation specifications.
 
 ### A. Sui Move Implementation (`project_registry.move`)
 
@@ -324,7 +366,10 @@ contract ProjectRegistry is ERC1155, ReentrancyGuard {
 
 ---
 
-## 4. Cost Benchmarks & Economic Comparison
+## 4. Unverified Historical Cost Estimates
+
+These figures are not measured acceptance criteria. Benchmark the implemented
+contracts, including multi-asset accounting, fees, and sponsorship, on each chain.
 
 | Operational Dimension | Sui (Move L1) | opBNB (EVM L2) | Base (EVM L2) |
 | :--- | :--- | :--- | :--- |
