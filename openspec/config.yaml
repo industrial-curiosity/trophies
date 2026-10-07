@@ -1,0 +1,78 @@
+schema: spec-driven
+
+context: |
+  Project: Trophies, a decentralized project registry with fractional project
+  shares and donation-funded distributions to existing share holders.
+  Product reference: docs/overview.md. Its lifecycle describes intended behavior;
+  embedded contracts are illustrative, untested starting points, not production
+  implementations. Fee benchmarks are unverified estimates, not acceptance criteria.
+
+  Required blockchain targets:
+  - Base Sepolia and Base mainnet.
+  - opBNB Testnet and opBNB mainnet.
+  - Sui Testnet and Sui mainnet.
+  Build and validate contracts for all three chains on their testnets before
+  mainnet release. After contracts are fully tested and ready for production,
+  the owner intends to deploy to all three mainnets and let users choose.
+  Mainnet deployment is a separate release action, not implied by implementation.
+
+  Contract languages: Solidity for Base and opBNB; Move for Sui.
+  Share domain behavior and acceptance scenarios across implementations while
+  respecting EVM and Sui differences in ownership, authorization, and execution.
+  No cross-chain bridge or synchronized accounting has been requested; treat
+  deployment state and assets as network-local unless explicitly specified.
+  Build tools, dependency versions, repository layout, and upgrade strategy
+  remain undecided; establish them in the relevant change design.
+
+  Core behavior:
+  - Managers register projects and authorize issuance of project shares.
+  - Shares support fractional ownership and transfers with explicit fixed-point units.
+  - Donations increase a per-project cumulative reward-per-share index in O(1)
+    work with respect to holder count, without iterating over holders.
+  - Newly issued shares receive no entitlement to donations preceding issuance.
+  - Minting, transfers, splitting, merging, and claims must preserve accrued
+    entitlements without duplicating rewards or granting historical rewards to
+    newly acquired shares. Define which operations exist per implementation.
+  - Claims must verify project/share association and authorized entitlement;
+    accounting and custody must isolate projects and supported donation assets.
+  - Native assets and stablecoins are product goals. Initial supported assets
+    and multi-asset accounting must be explicitly selected in change artifacts.
+  - Gasless means sponsored cost to the end user, not zero network cost.
+    Sponsorship requires an actual paymaster or Sui sponsor integration; a
+    contract gas-pool balance alone does not implement sponsorship.
+
+  Decisions still requiring design: share precision, transfer settlement versus
+  retained claim credits, rounding and dust policy, supported donation assets,
+  sponsorship funding and budget controls, permissions, and contract lifecycle.
+  Define event/transaction ordering precisely; do not assume a block boundary
+  alone determines entitlement between operations within the same block.
+  The overview's fractional-transfer example must be reconciled with its earlier
+  balances before being used as an expected payout test.
+
+  Current scope is blockchain contracts, tooling, tests, and deployment preparation.
+  Frontend architecture and hosting discussions are paused; no frontend stack
+  or hosting provider is selected.
+
+rules:
+  proposal:
+    - State affected chains and networks, scope, non-goals, and unresolved decisions.
+    - Distinguish implemented behavior from intended behavior and illustrative code.
+    - Keep frontend work out of blockchain changes unless explicitly requested.
+  design:
+    - Specify common accounting invariants and chain-specific implementation differences.
+    - Define integer units, precision, rounding, dust handling, and arithmetic bounds.
+    - Define authorization, project and asset isolation, custody, and failure behavior.
+    - Explain entitlement updates for minting, transfers, claims, and any split or merge operations, including zero-balance recipients and repeated small amounts.
+    - Separate donation liabilities from sponsorship funds and describe the real sponsorship payment path when in scope.
+    - Explicitly resolve ambiguities in docs/overview.md rather than copying its code or numerical examples as authoritative.
+  specs:
+    - Express observable behavior with explicit preconditions, actions, and outcomes.
+    - Cover no retroactive rewards, preservation of accrued entitlement, and conservation of funds under the stated rounding policy.
+    - Include unauthorized operations, cross-project misuse, invalid amounts, zero-share donations, and payout failures where relevant.
+    - Identify applicable chains and document any intentional behavioral differences.
+  tasks:
+    - Include verification for both Solidity and Move when common contract behavior changes.
+    - Include accounting boundary tests, adversarial transaction sequences, and conservation properties for contract changes.
+    - Verify donation work does not scale with holder count using appropriate chain-specific measurements.
+    - Separate local verification, all three testnet validations, and mainnet release steps; record fresh evidence before marking verification complete.
+    - Keep network-specific addresses, package IDs, asset identifiers, and deployment records explicit and separate.
