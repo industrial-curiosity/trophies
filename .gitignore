@@ -1,0 +1,8 @@
+contracts/evm/out/
+contracts/evm/cache/
+contracts/evm/lib/
+contracts/sui/build/
+contracts/sui/.move/
+.tool-cache/
+.env
+*.log

@@ -1,0 +1,8 @@
+{
+  "base-sepolia": {"family": "evm", "chainId": 84532, "environment": "testnet", "registryAddress": null},
+  "base": {"family": "evm", "chainId": 8453, "environment": "mainnet", "registryAddress": null},
+  "opbnb-testnet": {"family": "evm", "chainId": 5611, "environment": "testnet", "registryAddress": null},
+  "opbnb": {"family": "evm", "chainId": 204, "environment": "mainnet", "registryAddress": null},
+  "sui-testnet": {"family": "sui", "environment": "testnet", "packageId": null, "registryObjectId": null},
+  "sui": {"family": "sui", "environment": "mainnet", "packageId": null, "registryObjectId": null}
+}

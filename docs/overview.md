@@ -38,7 +38,9 @@ mainnet, with independent network-local accounting.
   Fixes require replacement deployments and any necessary migration.
 - Sponsorship funding and budget mechanics remain open. Frontend work is paused.
 
-This specification details the architecture for a decentralized project registry smart contract. Project managers can register their projects and generate/mint project shares (tokens) at sub-penny or zero-gas cost to end-users. Donors deposit funds (native assets or stablecoins) into the registry, which are immediately and strictly allocated to existing project token holders using an \\(O(1)\\) constant-time checkpointed dividend algorithm.
+The current contract source and container test commands are documented in [contracts.md](contracts.md) and the repository README. Local verification is complete for the initial accounting implementation; sponsorship, live testnet checks, and independent security review remain pending.
+
+This specification details the architecture for a decentralized project registry smart contract. Project managers can register their projects and generate/mint project shares (tokens) with sponsored end-user fees as a product goal; actual costs require implementation measurements. Donors deposit funds (native assets or stablecoins) into the registry, which are immediately and strictly allocated to existing project token holders using an \\(O(1)\\) constant-time checkpointed dividend algorithm.
 
 **Key System Highlights**:
 
@@ -55,7 +57,9 @@ This specification details the architecture for a decentralized project registry
 
 * `accumulated_reward_per_share`: Per-project, per-asset index tracking cumulative net donations allocated per full share (\\(O(1)\\) constant time).
 * `total_shares`: Aggregate count of active shares/tokens for a given project.
-* `entry_marker`: Per-token or per-user index recording the `accumulated_reward_per_share` at the time of token acquisition or last withdrawal.
+* `entry_marker`: Per-project, per-asset, per-wallet index recording the `accumulated_reward_per_share` at the time of token acquisition or last withdrawal.
+
+* `withdrawable_credit`: Per-project, per-asset, per-wallet accumulated entitlement, retained after transfers and after a wallet has zero shares.
 
 ### Step-by-Step Operational Example (net distributable amounts, one asset)
 

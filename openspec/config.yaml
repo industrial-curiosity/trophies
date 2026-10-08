@@ -63,10 +63,18 @@ context: |
     Sponsorship requires an actual paymaster or Sui sponsor integration; a
     contract gas-pool balance alone does not implement sponsorship.
 
-  Decisions still requiring design: rounding and dust policy, multi-asset token
-  compatibility and scalable entitlement accounting, generation metadata encoding,
-  fee denomination and collection, sponsorship funding and budget controls, and
-  the scope and granularity of contract-owner emergency controls.
+  Initial implementation choices: manager-enabled assets without a platform
+  allowlist, a separate ledger per project/asset, on-chain issuance events, and
+  per-asset explicit claims. The fee is deducted in the donated asset with carried
+  fee remainders; holder fractional remainders persist and donation dust remains
+  unallocated. EVM supply and lifetime receipts use u128-sized accounting bounds;
+  Sui supply uses u128 and Coin/Balance amounts use u64. No administrative dust sweep.
+  Owner operational and withdrawal pauses exist independently per project and globally.
+  Solidity uses ERC-1155 balances; Sui uses project-local address balances rather
+  than freely transferable share objects. Transfer/mint work scales with enabled
+  asset count. See the active change design and docs/contracts.md for exact behavior.
+  Still requiring implementation and verification: sponsorship funding and budget
+  controls, funded testnet checks, practical cost bounds, and independent security review.
   Define event/transaction ordering precisely; do not assume a block boundary
   alone determines entitlement between operations within the same block.
 
