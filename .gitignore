@@ -4,5 +4,8 @@ contracts/evm/lib/
 contracts/sui/build/
 contracts/sui/.move/
 .tool-cache/
+node_modules/
+mint-result.json
 .env
 *.log
+.DS_Store

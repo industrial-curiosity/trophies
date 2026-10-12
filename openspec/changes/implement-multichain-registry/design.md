@@ -20,6 +20,8 @@ For EVM assets, use SafeERC20 and require exact balance deltas on deposits and p
 
 Use an ERC-1155 project ID on EVM, with 10^18 base units per full trophy and no burn entry point. Use project-local address balances on Sui; this is fungible ownership rather than unique share objects, with no split/merge API needed. Record description, issuer, recipient, base-unit quantity, and external reference in chain events. The description itself is recorded, not merely a hash. External reference content is not copied on-chain.
 
+When the contributor has a valid address for the selected chain, the manager mints directly to it. Otherwise the manager mints to their own wallet and the project records the contributor, chain, project, quantity, and holding wallet off-chain for later delivery. Give the contributor chain-specific wallet instructions. When the contributor supplies an address, the wallet holding the shares transfers the recorded quantity; it does not mint again. This is manager custody, not an on-chain reservation: fungible units are not segregated and the manager can transfer or claim while holding them. The manager earns donations during custody, and accrued credits remain with that wallet after delivery. Generation metadata records the actual manager recipient, while the project keeps the contributor association off-chain without publishing personal details. The registry rejects prohibited recipients but cannot establish who controls a valid address. Operational pauses can delay minting or delivery.
+
 ### Dividend accounting
 
 Use an integer index with scale Q = 10^36 and checked arithmetic. Per asset, donation of net amount D with supply S adds floor(D*Q/S) to the index. Supply and credited amounts use bounded integers; overflows abort without changing state. The implementation must document the chosen bounds and use full-width multiplication/division where supported.
@@ -43,13 +45,17 @@ Fees accrue in the donated asset, deducted from received donations. Use 1/200 of
 
 ### Authorization and pauses
 
-A project creator is its manager. Only that manager issues shares, enables assets, and changes the project's manager pause. Manager pause blocks minting, donations, and transfers; it never blocks claims. The contract owner has an independent global operational pause and global withdrawal pause plus independent per-project equivalents. Effective operational pause is the OR of manager, owner-project, and owner-global flags. Effective withdrawal pause includes only owner withdrawal flags. Managers cannot clear owner flags. Fee collections obey owner withdrawal pauses. Pauses never erase entitlement, change supply, or redirect holder funds. Initially keep manager and owner identities fixed to avoid extra transfer-of-authority machinery.
+A project creator is its initial manager. Only the current manager issues shares, enables assets, and changes the project's manager pause. Manager pause blocks minting, donations, and transfers; it never blocks claims. The current contract owner has an independent global operational pause and global withdrawal pause plus independent per-project equivalents. Effective operational pause is the OR of manager, owner-project, and owner-global flags. Effective withdrawal pause includes only owner withdrawal flags. Managers cannot clear owner flags. Fee collections obey owner withdrawal pauses. Pauses never erase entitlement, change supply, or redirect holder funds.
 
-### Immutability and sponsorship
+Both manager and platform-owner authority use separate two-step handoffs: the current authority nominates a valid different address, can cancel or replace that nomination, and the nominee accepts. No renunciation to a zero address. Existing authority remains until acceptance; the old address loses that role on acceptance. Emit nomination, cancellation, and acceptance events. Keep balances, credits, fees, and pause flags unchanged. The new platform owner controls uncollected fees. Manager-role transfer does not move shares held by the former manager, including undelivered contributor shares, or historical credits. Before a manager handoff, the project must reconcile outstanding delivery records and arrange custody transfers; the contract cannot enforce off-chain obligations or move the old wallet's shares automatically. Update the mint workflow credential after acceptance.
+
+### Immutability and transaction fees
 
 No EVM proxy or delegatecall upgrade path. Sui publication must irreversibly relinquish UpgradeCap and verify that transaction result before release is considered immutable.
 
-Sponsorship remains part of the change: bind sponsorship to approved registry calls, preserve the user's identity, maintain project budgets separately from donations, and prohibit arbitrary relaying or payouts from holder vaults. EVM uses an existing ERC-4337 paymaster/bundler interface rather than a custom account-abstraction stack; Sui uses protocol-sponsored transactions. Sponsor credentials and funded accounts are external prerequisites. Provider selection and budget reconciliation are still open; no funded gas-pool placeholder will be reported as functioning sponsorship.
+The signer pays each network fee in native currency. The manager pays to register and mint; the donor pays to donate; holders pay to transfer and claim. A manager delivering shares held in their wallet pays as that holder. No gas deposit or sponsor infrastructure is included. Each network needs its own funded wallet, and donated assets, holder liabilities, and platform fees never pay gas.
+
+Store one approved contribution per `trophies/YYYYMMDDHHmmss-<branch-slug>.json` file. The record contains a unique external reference, network, project, optional recipient, human-readable decimal trophy quantity, and description. Require pull-request review and branch protection for `main`. A push to `main` after a merge detects added or modified files in that directory from the pushed commit range, validates their UTC timestamps, safe branch slugs, and decimal quantities without secrets, converts quantities exactly to 18-decimal base units, and creates one mint job per record. The workflow checks out that exact merge revision, validates the deployment and current manager address, checks chain state for the reference, then submits a manager-signed transaction. Project-and-network-specific GitHub environments provide the signing keys. Serialize transactions per network to avoid wallet nonce conflicts across merged pull requests; preserve pending runs in the queue. A separate manager wallet dedicated to automation limits exposure from the CI key, although manager-held shares and accrued credits in that wallet remain at risk if the key is compromised. Do not log the credential or contributor identity. For uncertain submissions, query chain state before retrying. Preserve the transaction hash and effective recipient in a durable, access-controlled off-chain record; a missing address creates an outstanding delivery obligation there. After a manager handoff, rotate the workflow credential to the new manager before processing another contribution.
 
 ### Tooling
 
@@ -62,6 +68,8 @@ Use Docker for both toolchains; no host tool installation is authorized. Pin Fou
 - Owner can pause withdrawals indefinitely → explicit permission tests and documentation of owner trust; immutability does not eliminate administrative powers.
 - High precision still has finite arithmetic bounds → boundary tests and checked operations; never accept wrapping.
 - Immutable defects cannot be patched in place → adversarial tests, independent security review, and replacement deployment procedures.
+- Manager-held shares depend on the holding wallet for later delivery; role handoff does not recover them → record outstanding deliveries and reconcile custody before accepting a handoff.
+- Automated manager credentials can mint or move manager-held shares if compromised → use a dedicated wallet with limited gas, protected secrets, reviewed contribution pull requests, and branch protection; rotate credentials after a handoff.
 
 ## Migration Plan
 
@@ -69,6 +77,6 @@ No stored data exists to migrate. Verify locally, then deploy and exercise indep
 
 ## Open Questions
 
-- Funded sponsor and deployment access; local Docker execution is authorized.
-- Sponsor provider, project budget custody/reconciliation, and funded testnet credentials.
+- Manager signing credentials and funded testnet deployment access; local Docker execution is authorized.
+- Access-controlled durable delivery record and its operator for a production workflow.
 - Practical asset and share bounds established by implementation benchmarks.

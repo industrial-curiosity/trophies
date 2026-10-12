@@ -1,0 +1,16 @@
+{
+  "name": "trophies-contribution-mint",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test:mint": "node --test tests/mint-contribution.test.mjs",
+    "mint": "node scripts/mint-contribution.mjs"
+  },
+  "dependencies": {
+    "@mysten/sui": "2.35.0",
+    "viem": "2.57.4"
+  }
+}

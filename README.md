@@ -3,7 +3,8 @@
 Immutable project registry contracts for Base, opBNB, and Sui. Managers issue
 fungible trophies with 18 decimal places and unlimited ongoing issuance. Donations
 accrue to holders at the time of donation; transfers preserve the seller's earned
-withdrawal eligibility. The platform fee is 0.5% in the donation asset.
+withdrawal eligibility. Manager and platform-owner roles support two-step handoffs.
+The platform fee is 0.5% in the donation asset.
 
 The implementation is under active verification. Local tests do not constitute
 an audit or mainnet readiness. No network deployment has been performed.
@@ -33,12 +34,17 @@ chains. Do not use this build configuration for publication.
 - `contracts/evm/test` and `contracts/sui/tests`: isolated local contract tests.
 - `deployments/networks.json`: six separate deployment targets; null identifiers mean undeployed.
 - [Contract behavior and release procedure](docs/contracts.md).
+- [Contributor wallet setup for Base, opBNB, and Sui](docs/contributor-wallets.md).
+- [Manager-signed contribution mint workflow](docs/mint-automation.md).
+- [Contract review, testnet deployment, wallet testing, and fixes](docs/testnet-guide.md).
 - [Product overview](docs/overview.md).
 - [Active implementation tasks](openspec/changes/implement-multichain-registry/tasks.md).
 
 ## Verification scope
 
 The tests exercise minting, transfers, dividends, fees, remainders, permissions,
-and pauses. Funded sponsorship, testnet end-to-end checks, and independent security
-review remain release requirements. No sponsorship vault placeholder is advertised
-as a functioning gas sponsor.
+and pauses. Each signer pays their own network fees; merging a reviewed
+timestamped trophy file into protected `main` triggers a manager-signed testnet mint
+after deployment and secret setup.
+Funded testnet end-to-end checks and independent security review remain release
+requirements.

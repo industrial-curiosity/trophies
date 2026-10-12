@@ -92,7 +92,7 @@ contract ProjectRegistryTest {
     }
 
     function _mint(address to, uint256 quantity) private {
-        registry.mint(project, to, quantity, "contribution", "https://example.test/work");
+        registry.mint(project, to, quantity, "contribution", "");
     }
 
     function _whole(uint256 id, address asset, address holder) private view returns (uint256) {
@@ -156,7 +156,7 @@ contract ProjectRegistryTest {
 
     function testGenerationRecord() public {
         vm.recordLogs();
-        _mint(ALICE, UNIT / 2);
+        registry.mint(project, ALICE, UNIT / 2, "contribution", "https://example.test/work");
         Vm.Log[] memory logs = vm.getRecordedLogs();
         Vm.Log memory record = logs[logs.length - 1];
         require(
@@ -181,6 +181,123 @@ contract ProjectRegistryTest {
         vm.expectRevert(ProjectRegistry.Unauthorized.selector);
         vm.prank(BOB);
         registry.enableAsset(project, address(token));
+    }
+
+    function testManagerHeldIssuanceAndHandoffKeepCreditsWithHoldingWallet() public {
+        vm.prank(CAROL);
+        uint256 heldProject = registry.registerProject();
+        vm.prank(CAROL);
+        registry.mint(heldProject, CAROL, UNIT, "contribution", "reference");
+        registry.donateNative{value: 20_000}(heldProject);
+        vm.prank(CAROL);
+        registry.setManagerPause(heldProject, true);
+        vm.prank(CAROL);
+        registry.nominateManager(heldProject, ALICE);
+        vm.prank(ALICE);
+        registry.acceptManager(heldProject);
+        _eq(uint160(registry.pendingManager(heldProject)), 0);
+        (address currentManager,,,,) = registry.projectInfo(heldProject);
+        require(currentManager == ALICE, "manager not transferred");
+        vm.expectRevert(ProjectRegistry.Unauthorized.selector);
+        vm.prank(CAROL);
+        registry.mint(heldProject, BOB, UNIT, "", "");
+        vm.prank(ALICE);
+        registry.setManagerPause(heldProject, false);
+        vm.prank(CAROL);
+        registry.safeTransferFrom(CAROL, BOB, heldProject, UNIT, "");
+        _eq(registry.balanceOf(CAROL, heldProject), 0);
+        _eq(registry.balanceOf(BOB, heldProject), UNIT);
+        _eq(_whole(heldProject, address(0), CAROL), 19_900);
+        _eq(_whole(heldProject, address(0), BOB), 0);
+        registry.donateNative{value: 20_000}(heldProject);
+        _eq(_whole(heldProject, address(0), CAROL), 19_900);
+        _eq(_whole(heldProject, address(0), BOB), 19_900);
+    }
+
+    function testManagerNominationRequiresCurrentManagerAndNomineeAcceptance() public {
+        vm.expectRevert(ProjectRegistry.Unauthorized.selector);
+        vm.prank(BOB);
+        registry.nominateManager(project, ALICE);
+        vm.expectRevert(ProjectRegistry.InvalidRecipient.selector);
+        registry.nominateManager(project, address(0));
+        vm.expectRevert(ProjectRegistry.InvalidRecipient.selector);
+        registry.nominateManager(project, address(this));
+        vm.expectRevert(ProjectRegistry.InvalidRecipient.selector);
+        registry.nominateManager(project, address(registry));
+        registry.nominateManager(project, ALICE);
+        vm.expectRevert(ProjectRegistry.Unauthorized.selector);
+        vm.prank(BOB);
+        registry.acceptManager(project);
+        registry.nominateManager(project, BOB);
+        vm.expectRevert(ProjectRegistry.Unauthorized.selector);
+        vm.prank(ALICE);
+        registry.acceptManager(project);
+        registry.cancelManagerNomination(project);
+        _eq(uint160(registry.pendingManager(project)), 0);
+        vm.expectRevert(ProjectRegistry.Unauthorized.selector);
+        vm.prank(BOB);
+        registry.acceptManager(project);
+        registry.nominateManager(project, ALICE);
+        vm.prank(ALICE);
+        registry.acceptManager(project);
+        vm.expectRevert(ProjectRegistry.Unauthorized.selector);
+        registry.cancelManagerNomination(project);
+    }
+
+    function testOwnerHandoffPreservesPauseAndUncollectedFees() public {
+        _mint(ALICE, UNIT);
+        registry.donateNative{value: 20_000}(project);
+        vm.prank(OWNER);
+        registry.setGlobalPause(true, true);
+        vm.prank(OWNER);
+        registry.nominateOwner(BOB);
+        vm.prank(BOB);
+        registry.acceptOwner();
+        require(registry.owner() == BOB && registry.pendingOwner() == address(0), "owner not transferred");
+        require(registry.operationsPaused() && registry.withdrawalsPaused(), "pause changed");
+        vm.expectRevert(ProjectRegistry.Unauthorized.selector);
+        vm.prank(OWNER);
+        registry.setGlobalPause(false, false);
+        vm.expectRevert(ProjectRegistry.Paused.selector);
+        vm.prank(BOB);
+        registry.collectFees(project, address(0));
+        vm.prank(BOB);
+        registry.setGlobalPause(false, false);
+        vm.prank(BOB);
+        _eq(registry.collectFees(project, address(0)), 100);
+        _eq(BOB.balance, 100);
+        _eq(_whole(project, address(0), ALICE), 19_900);
+    }
+
+    function testOwnerNominationGuardsAndCancellation() public {
+        vm.expectRevert(ProjectRegistry.Unauthorized.selector);
+        registry.nominateOwner(ALICE);
+        vm.expectRevert(ProjectRegistry.InvalidRecipient.selector);
+        vm.prank(OWNER);
+        registry.nominateOwner(address(0));
+        vm.expectRevert(ProjectRegistry.InvalidRecipient.selector);
+        vm.prank(OWNER);
+        registry.nominateOwner(OWNER);
+        vm.expectRevert(ProjectRegistry.InvalidRecipient.selector);
+        vm.prank(OWNER);
+        registry.nominateOwner(address(registry));
+        vm.prank(OWNER);
+        registry.nominateOwner(ALICE);
+        vm.expectRevert(ProjectRegistry.Unauthorized.selector);
+        vm.prank(BOB);
+        registry.acceptOwner();
+        vm.prank(OWNER);
+        registry.cancelOwnerNomination();
+        vm.expectRevert(ProjectRegistry.Unauthorized.selector);
+        vm.prank(ALICE);
+        registry.acceptOwner();
+        vm.prank(OWNER);
+        registry.nominateOwner(BOB);
+        vm.prank(BOB);
+        registry.acceptOwner();
+        vm.expectRevert(ProjectRegistry.Unauthorized.selector);
+        vm.prank(OWNER);
+        registry.cancelOwnerNomination();
     }
 
     function testInvalidProjectAndZeroDonation() public {
@@ -429,6 +546,40 @@ contract ProjectRegistryTest {
         emit log_named_uint("transfer, 1 asset", oneGas);
         emit log_named_uint("transfer, 6 assets", manyGas);
         require(manyGas > oneGas, "asset cost not measured");
+    }
+
+    function testMintCostGrowsWithEnabledAssets() public {
+        uint256 one = registry.registerProject();
+        uint256 many = registry.registerProject();
+        for (uint256 i; i < 5; ++i) {
+            registry.enableAsset(many, address(new TestToken()));
+        }
+        vm.cool(address(registry));
+        uint256 start = gasleft();
+        registry.mint(one, ALICE, UNIT, "", "cost-one");
+        uint256 oneGas = start - gasleft();
+        vm.cool(address(registry));
+        start = gasleft();
+        registry.mint(many, BOB, UNIT, "", "cost-six");
+        uint256 manyGas = start - gasleft();
+        emit log_named_uint("mint, 1 asset", oneGas);
+        emit log_named_uint("mint, 6 assets", manyGas);
+        require(manyGas > oneGas, "asset cost not measured");
+    }
+
+    function testGenerationReferencePreventsDuplicateMintPerProject() public {
+        uint256 id = registry.registerProject();
+        registry.mint(id, ALICE, UNIT, "work", "github:42");
+        require(registry.usedReference(id, keccak256(bytes("github:42"))), "reference not recorded");
+        vm.expectRevert(ProjectRegistry.DuplicateReference.selector);
+        registry.mint(id, BOB, 2 * UNIT, "other work", "github:42");
+        _eq(registry.balanceOf(BOB, id), 0);
+        (, uint256 supply,,,) = registry.projectInfo(id);
+        _eq(supply, UNIT);
+        uint256 other = registry.registerProject();
+        registry.mint(other, BOB, UNIT, "work", "github:42");
+        registry.mint(id, BOB, UNIT, "manual", "");
+        registry.mint(id, BOB, UNIT, "manual", "");
     }
 
     function testBatchTransfersPreserveBothProjectsAndDuplicateIds() public {

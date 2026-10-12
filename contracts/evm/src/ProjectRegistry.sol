@@ -14,13 +14,15 @@ contract ProjectRegistry is ERC1155, ReentrancyGuard {
     uint256 public constant SHARE_UNIT = 1e18;
     uint256 public constant REWARD_SCALE = 1e36;
     uint256 public constant MAX_ACCOUNTING_AMOUNT = type(uint128).max;
-    address public immutable owner;
+    address public owner;
+    address public pendingOwner;
     uint256 public projectCount;
     bool public operationsPaused;
     bool public withdrawalsPaused;
 
     struct Project {
         address manager;
+        address pendingManager;
         uint256 supply;
         bool managerPaused;
         bool ownerPaused;
@@ -43,6 +45,7 @@ contract ProjectRegistry is ERC1155, ReentrancyGuard {
     }
 
     mapping(uint256 => Project) private projects;
+    mapping(uint256 => mapping(bytes32 => bool)) public usedReference;
     mapping(uint256 => mapping(address => Asset)) private assets;
     mapping(uint256 => mapping(address => mapping(address => Account))) private accounts;
 
@@ -54,6 +57,7 @@ contract ProjectRegistry is ERC1155, ReentrancyGuard {
     error UnsupportedAsset();
     error PayoutFailed();
     error AccountingLimit();
+    error DuplicateReference();
 
     event ProjectRegistered(uint256 indexed projectId, address indexed manager);
     event AssetEnabled(uint256 indexed projectId, address indexed asset);
@@ -73,6 +77,12 @@ contract ProjectRegistry is ERC1155, ReentrancyGuard {
     event ManagerPauseChanged(uint256 indexed projectId, bool paused);
     event OwnerPauseChanged(uint256 indexed projectId, bool operations, bool withdrawals);
     event GlobalPauseChanged(bool operations, bool withdrawals);
+    event ManagerTransferStarted(uint256 indexed projectId, address indexed manager, address indexed nominee);
+    event ManagerTransferCancelled(uint256 indexed projectId, address indexed manager);
+    event ManagerTransferred(uint256 indexed projectId, address indexed previousManager, address indexed newManager);
+    event OwnerTransferStarted(address indexed owner, address indexed nominee);
+    event OwnerTransferCancelled(address indexed owner);
+    event OwnerTransferred(address indexed previousOwner, address indexed newOwner);
 
     constructor(address platformOwner) ERC1155("") {
         if (platformOwner == address(0) || platformOwner == address(this)) revert InvalidRecipient();
@@ -95,6 +105,55 @@ contract ProjectRegistry is ERC1155, ReentrancyGuard {
         _enableAsset(id, asset);
     }
 
+    function nominateManager(uint256 id, address nominee) external {
+        Project storage p = _project(id);
+        if (msg.sender != p.manager) revert Unauthorized();
+        if (nominee == address(0) || nominee == address(this) || nominee == p.manager) revert InvalidRecipient();
+        p.pendingManager = nominee;
+        emit ManagerTransferStarted(id, msg.sender, nominee);
+    }
+
+    function cancelManagerNomination(uint256 id) external {
+        Project storage p = _project(id);
+        if (msg.sender != p.manager) revert Unauthorized();
+        p.pendingManager = address(0);
+        emit ManagerTransferCancelled(id, msg.sender);
+    }
+
+    function acceptManager(uint256 id) external {
+        Project storage p = _project(id);
+        if (msg.sender != p.pendingManager || msg.sender == address(0)) revert Unauthorized();
+        address previous = p.manager;
+        p.manager = msg.sender;
+        p.pendingManager = address(0);
+        emit ManagerTransferred(id, previous, msg.sender);
+    }
+
+    function nominateOwner(address nominee) external {
+        if (msg.sender != owner) revert Unauthorized();
+        if (nominee == address(0) || nominee == address(this) || nominee == owner) revert InvalidRecipient();
+        pendingOwner = nominee;
+        emit OwnerTransferStarted(msg.sender, nominee);
+    }
+
+    function cancelOwnerNomination() external {
+        if (msg.sender != owner) revert Unauthorized();
+        pendingOwner = address(0);
+        emit OwnerTransferCancelled(msg.sender);
+    }
+
+    function acceptOwner() external {
+        if (msg.sender != pendingOwner || msg.sender == address(0)) revert Unauthorized();
+        address previous = owner;
+        owner = msg.sender;
+        pendingOwner = address(0);
+        emit OwnerTransferred(previous, msg.sender);
+    }
+
+    function pendingManager(uint256 id) external view returns (address) {
+        return _project(id).pendingManager;
+    }
+
     function mint(
         uint256 id,
         address recipient,
@@ -105,6 +164,11 @@ contract ProjectRegistry is ERC1155, ReentrancyGuard {
         Project storage p = _project(id);
         if (msg.sender != p.manager) revert Unauthorized();
         if (quantity == 0) revert InvalidAmount();
+        if (bytes(externalReference).length != 0) {
+            bytes32 referenceHash = keccak256(bytes(externalReference));
+            if (usedReference[id][referenceHash]) revert DuplicateReference();
+            usedReference[id][referenceHash] = true;
+        }
         _mint(recipient, id, quantity, "");
         emit TrophiesGenerated(id, msg.sender, recipient, quantity, description, externalReference);
     }

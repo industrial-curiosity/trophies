@@ -12,8 +12,38 @@ hooks that users could bypass.
 
 Each mint records description, issuer, recipient, quantity, and external reference
 in an on-chain event. Neither implementation maintains per-unit provenance or an
-external metadata server. Manager and platform-owner identities are fixed for the
-initial implementation. Immutability does not remove administrative pause powers.
+external metadata server. In the current source, manager and platform-owner
+roles support separate two-step handoffs: the current authority nominates an
+address, may cancel or replace it, and the nominee accepts. The old authority
+remains active until acceptance. Role handoffs do not clear pauses or move shares,
+credits, or vault funds. Immutability does not remove administrative pause powers.
+
+If a contributor has an address on the selected chain, the manager mints directly
+to it. Otherwise the manager mints to their own wallet, records the undelivered
+quantity and contributor off-chain, and transfers that quantity after the
+contributor supplies an address; see [Contributor wallet setup](contributor-wallets.md).
+The contracts permit these actions but do not reserve or segregate the manager's
+fungible shares for a contributor. The contract rejects invalid recipients but
+cannot prove who controls a valid address. Donations made while the manager holds
+the shares accrue to the manager's wallet, and those credits stay there after
+the shares transfer. Manager-role handoff will not move these shares or credits.
+
+## Manager-held delivery record
+
+When minting to the manager for a contributor without a wallet, the project must
+maintain a private delivery record with the contribution reference, chain and
+network, project ID, contributor identity, quantity in base units, holding wallet,
+mint transaction, and delivery status. When the contributor provides an address,
+record it and the transfer transaction. Compare the recorded quantity and holding
+wallet with the on-chain mint and transfer events. Do not put personal identity or
+recovery credentials in the on-chain description or external reference.
+
+Before accepting a manager-role handoff, reconcile every undelivered allocation.
+The holding wallet must remain available to authorize delivery or transfer the
+shares to a successor wallet. The role handoff itself cannot move the holdings;
+the former manager can still transfer shares as their holder wallet afterward.
+The registry cannot enforce these private delivery records or the manager's
+promise to deliver.
 
 ## Multi-asset donations and accounting
 
@@ -66,14 +96,26 @@ claims. Effective pauses combine independent flags; a manager cannot clear an ow
 pause. Owner withdrawal pauses can prevent claims indefinitely, but cannot erase
 credits, burn shares, or confiscate holder funds. Pause changes emit events.
 
-## Sponsorship
+## Network fees
 
-Gas sponsorship is not implemented yet. The contracts preserve caller authorization
-for account-based issuance on EVM and protocol-sponsored transactions on Sui, but
-that alone does not supply gas. A funded sponsor, call policy, and isolated project
-budgets must be implemented and verified before this milestone is complete.
+Each transaction signer pays gas from their own wallet on the selected network.
+The manager pays to register and mint, including mints to their own wallet for
+contributors without an address. Donors pay to donate. Holders pay to transfer
+and claim; a manager delivering shares from their wallet pays as that holder.
+The manager should keep native gas currency on every network where they mint.
+Gas does not come from donation custody or platform fees. There is no gas pool,
+paymaster, or sponsored transaction path in this release.
+
+The [contribution mint workflow](mint-automation.md) signs from a configured
+manager wallet on the three testnets. Nonempty external references are unique
+per project on-chain; a retry cannot mint the same contribution twice. Empty
+references remain valid for manual mints. The workflow cannot run against a
+network until its deployment identifiers and manager credential are configured.
 
 ## Deployment procedure
+
+Use the [testnet walkthrough](testnet-guide.md) for container commands, faucet
+links, wallet exercises with expected results, and replacement deployments.
 
 1. Run both container test suites, review dependency advisories, inspect compiler
    diagnostics, and complete independent security review. Stop on unexplained failures.
@@ -91,7 +133,7 @@ budgets must be implemented and verified before this milestone is complete.
 5. Record contract/package and registry IDs, transaction identifiers, network,
    source revision, toolchain versions, immutable-release evidence, and test results.
    Exercise registration, issuance, multi-asset donation, transfer, claims, fees,
-   both pause authorities, and funded sponsorship on all three testnets.
+   both pause authorities, and manager-signed contribution mints on all three testnets.
 6. Mainnet publication is a separate release action after all readiness checks.
    Each chain has independent balances and vaults. Replacement releases require
    explicit migration design; they cannot repair earlier immutable deployments.
@@ -106,18 +148,26 @@ scans cannot establish correctness of these contracts or every framework depende
 The Sui linter flags claim's direct transfer to the sender as non-composable. That
 is intentional wallet payout behavior: no user-managed payout object is required.
 Foundry may flag exact token-balance comparisons and caller-directed native payouts;
-these enforce the asset compatibility and authorized claim rules. Per-item batch\nvalidation also produces loop-revert hints; those checks enforce atomic rejection\nof invalid projects, pauses, amounts, and supply overflow. Post-callback mint and\ndonation events are guarded against accounting reentrancy. Do not suppress
+these enforce the asset compatibility and authorized claim rules. Per-item batch
+validation also produces loop-revert hints; those checks enforce atomic rejection
+of invalid projects, pauses, amounts, and supply overflow. Post-callback mint and
+donation events are guarded against accounting reentrancy. Do not suppress
 diagnostics globally; review them with the relevant authorization and rollback tests.
 
 ## Local verification measurements
 
-On 2026-10-08, the Solidity suite passed 24 tests including 256 fuzz cases, and
-the Move suite passed 19 tests. The Solidity cost fixtures measured 140,433 gas
-for donations with both 1 and 100 holders; transfers measured 88,505 gas with
-one enabled asset and 164,855 gas with six enabled, unfunded assets. Funded asset
-transfers incur additional credit writes. These local cold-call measurements
-exclude deployment setup and do not estimate total L2 fees or dollar costs.
-Sui cost measurements and practical testnet limits are still pending.
+On 2026-10-12, the Solidity cost fixtures measured 140,455 gas for donations
+with both 1 and 100 holders. Minting with a nonempty contribution reference
+measured 126,424 gas with one enabled asset and 174,587 gas with six enabled
+assets. Transfers measured 88,527 and 164,877 gas at those same asset counts.
+These local cold-call measurements use unfunded assets; funded assets can add
+credit writes. They exclude deployment
+setup and EVM L2 data charges. The
+five-asset difference increased mint cost by 48,163 gas and transfer cost by
+76,350 gas in this fixture. There is no universal safe asset count: test the
+actual project asset set and maximum transaction size on each target network
+before enabling more assets. Sui transaction cost measurements and practical
+network limits are still pending funded testnet checks.
 
 The pinned OpenZeppelin 5.7.0 version had no known advisories returned by an OSV
 package/version query on that date. This check does not cover the complete Sui

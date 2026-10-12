@@ -1,0 +1,75 @@
+name: Mint merged contributions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'trophies/**'
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      records: ${{ steps.detect.outputs.records }}
+      count: ${{ steps.detect.outputs.count }}
+    steps:
+      - name: Find contribution files in merged push
+        run: echo 'Validating added and modified contribution records from the push to main.'
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install pinned SDKs
+        run: npm ci --ignore-scripts
+      - name: Validate changed files
+        id: detect
+        env:
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+        run: node scripts/find-merged-contributions.mjs
+
+  mint:
+    needs: detect
+    if: needs.detect.outputs.count != '0'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.detect.outputs.records) }}
+    runs-on: ubuntu-latest
+    environment: mint-${{ matrix.network }}-${{ matrix.project }}
+    concurrency:
+      group: mint-${{ matrix.network }}
+      queue: max
+    steps:
+      - name: Mint approved contribution
+        run: echo 'Signing a merged contribution with the selected project manager wallet.'
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install pinned SDKs
+        run: npm ci --ignore-scripts
+      - name: Sign and submit mint
+        env:
+          MINT_REQUEST_PATH: ${{ matrix.file }}
+          MANAGER_PRIVATE_KEY: ${{ secrets.MANAGER_PRIVATE_KEY }}
+          RPC_URL: ${{ vars.RPC_URL }}
+          SUI_CHAIN_IDENTIFIER: ${{ vars.SUI_CHAIN_IDENTIFIER }}
+          MINT_RESULT_PATH: mint-result.json
+        run: node scripts/mint-contribution.mjs
+      - name: Preserve transaction reference
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mint-result-${{ matrix.id }}-${{ github.run_id }}
+          path: mint-result.json
+          if-no-files-found: ignore
+          retention-days: 90

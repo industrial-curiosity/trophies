@@ -35,6 +35,10 @@ context: |
   - Trophies are fungible within each project. Record generation metadata and
     issuance history on-chain at minting: description, issuer, recipient, quantity,
     and external reference. No per-unit identity or ongoing provenance is required.
+  - When a contributor has no address, mint to the manager's wallet and keep an
+    off-chain delivery record. Transfer the shares from their holding wallet once
+    the contributor supplies an address; accrued custody-period rewards remain
+    with the manager wallet under the ordinary transfer rule.
   - Shares use 18 decimal places: one full trophy is 10^18 base units.
     Burning or manager revocation of shares is not allowed.
   - Donations increase a per-project cumulative reward-per-share index in O(1)
@@ -59,9 +63,13 @@ context: |
   - The contract owner has emergency controls over all projects, including
     withdrawals. Pause enforcement must preserve balances and claim entitlements;
     owner controls do not imply authority to confiscate holder funds.
+  - Manager and platform-owner authority must support separate two-step handoffs,
+    with nominee acceptance and no automatic movement of held shares or credits.
   - Gasless means sponsored cost to the end user, not zero network cost.
     Sponsorship requires an actual paymaster or Sui sponsor integration; a
     contract gas-pool balance alone does not implement sponsorship.
+    Funded sponsorship for minting, transfers, and claims is required in this
+    release on Base, opBNB, and Sui, with project budgets isolated from donations.
 
   Initial implementation choices: manager-enabled assets without a platform
   allowlist, a separate ledger per project/asset, on-chain issuance events, and

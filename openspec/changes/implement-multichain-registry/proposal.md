@@ -8,9 +8,10 @@ The repository contains agreed product rules but no executable contracts. Implem
 
 - Add an immutable Solidity registry for Base and opBNB and an immutable Move package for Sui.
 - Add unlimited manager-authorized issuance, 18-decimal shares, and on-chain generation records.
+- Mint to the manager when a contributor has no wallet address, then deliver the shares by transfer after they provide one.
 - Add multi-asset donations, a flat 0.5% platform fee, retained seller entitlements, and explicit withdrawals.
-- Add project-manager pauses and contract-owner emergency controls, including withdrawal pauses.
-- Add local verification, sponsorship integration, and deployment preparation for all six networks.
+- Add project-manager pauses, contract-owner emergency controls, and two-step manager and platform-owner handoffs.
+- Add local verification, manager-signed GitHub Actions minting from timestamped trophy files merged to protected `main`, caller-paid network fees, and deployment preparation for all six networks.
 
 ## Capabilities
 
@@ -18,7 +19,7 @@ The repository contains agreed product rules but no executable contracts. Implem
 
 - `project-registry`: Projects, fungible shares, generation records, and permissions.
 - `dividend-accounting`: Multi-asset custody, fees, retained entitlements, rounding, and withdrawals.
-- `contract-operations`: Emergency controls, immutable releases, sponsorship, and network-specific verification.
+- `contract-operations`: Emergency controls, immutable releases, caller-paid gas, contribution mint automation, and network-specific verification.
 
 ### Modified Capabilities
 
@@ -34,4 +35,4 @@ Frontend, bridges, synchronized cross-chain balances, burning, upgradeable proxi
 
 ## Open decisions and constraints
 
-No holder loop is allowed on donation. Transfers and minting may touch the project's funded assets, so their cost must be measured separately. Arbitrary asset behavior needs compatibility checks rather than assumed correctness. Toolchain installation, funded testnet accounts, and sponsorship infrastructure require available access before their checks can complete.
+No holder loop is allowed on donation. Transfers and minting may touch the project's enabled assets, so their cost must be measured separately. Arbitrary asset behavior needs compatibility checks rather than assumed correctness. Toolchain installation, manager signing credentials, and funded testnet accounts require available access before their live checks can complete.

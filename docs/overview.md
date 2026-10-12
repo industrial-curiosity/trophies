@@ -11,10 +11,14 @@ mainnet, with independent network-local accounting.
 - Trophies are fungible within a project. Record generation metadata and issuance
   history on-chain when minting; no per-unit identity or ongoing provenance is required.
   Each generation records description, issuer, recipient, quantity, and external
-  reference. Encoding and storage format remain to be designed.
+  reference. The current implementations record these fields in on-chain events.
 - Project managers can issue unlimited additional shares forever. There is no
   product supply cap or permanent issuance closure; finite integer bounds still
   apply. New shares dilute future distributions and never earn earlier donations.
+- If a contributor has no wallet address, mint to the manager's wallet, record
+  the outstanding delivery off-chain, and transfer the shares when they provide
+  an address. Past donation credits earned during manager custody stay with the
+  manager wallet.
 - Shares use 18 decimal places: one full trophy is 10^18 base units.
   Burning and manager revocation are not allowed.
 - Transfers retain previously earned dividends for the seller's wallet without
@@ -33,21 +37,26 @@ mainnet, with independent network-local accounting.
   projects, but cannot pause withdrawals.
 - The contract owner has emergency controls over all projects, including
   withdrawals. Pauses preserve accrued entitlements; these controls do not grant
-  authority to confiscate holder funds. Owner-control granularity remains open.
+  authority to confiscate holder funds. Current controls can apply globally or
+  to a selected project.
+- Manager and platform-owner roles require separate two-step handoffs. A role
+  handoff does not move shares or earnings held in the old manager's wallet.
 - Deployments are immutable: no proxy upgrades or retained Sui upgrade authority.
   Fixes require replacement deployments and any necessary migration.
-- Sponsorship funding and budget mechanics remain open. Frontend work is paused.
+- The project manager pays gas to register and mint. Donors pay to donate;
+  holders pay to transfer or claim. A GitHub Actions workflow can sign testnet
+  contribution mints with the manager's wallet after setup. Frontend work is paused.
 
-The current contract source and container test commands are documented in [contracts.md](contracts.md) and the repository README. Local verification is complete for the initial accounting implementation; sponsorship, live testnet checks, and independent security review remain pending.
+The current contract source and container test commands are documented in [contracts.md](contracts.md) and the repository README. The mint workflow is locally verified; live testnet checks and independent security review remain pending.
 
-This specification details the architecture for a decentralized project registry smart contract. Project managers can register their projects and generate/mint project shares (tokens) with sponsored end-user fees as a product goal; actual costs require implementation measurements. Donors deposit funds (native assets or stablecoins) into the registry, which are immediately and strictly allocated to existing project token holders using an \\(O(1)\\) constant-time checkpointed dividend algorithm.
+This specification details the architecture for a decentralized project registry smart contract. Project managers can register their projects and generate/mint project shares (tokens), paying network fees from their own wallets. Donors deposit funds (native assets or stablecoins) into the registry, which are immediately and strictly allocated to existing project token holders using an \\(O(1)\\) constant-time checkpointed dividend algorithm.
 
 **Key System Highlights**:
 
 * **\\(O(1)\\) Scaled Share Algorithm**: Prevents block gas limit failures by eliminating iteration loops during donation deposits. Donations update a global multiplier in a single step regardless of whether 2 or 20,000 token holders exist.
 * **Transaction-Ordered Checkpointing**: Newly generated tokens created after a donation event receive exactly \$0.00 from past donations.
 * **Fractional Token & Ownership Transfers**: Supports partial transfers (e.g., 0.5 shares) while preserving the seller's accumulated withdrawal eligibility without an automatic payout.
-* **Gasless Project Top-Up Vault**: Intended to let project managers fund sponsored token generation. A funded balance alone is insufficient; an actual EVM paymaster or Sui sponsor integration is required.
+* **Caller-Paid Network Fees**: Managers pay to register and mint, donors pay to donate, and holders pay to transfer or claim.
 
 ---
 
@@ -89,8 +98,8 @@ the multi-asset funding policy, platform fees, generation metadata, emergency
 controls, retained seller entitlements, or immutable deployment setup. The Sui
 example does not enforce project/share association on claims. The Solidity example
 automatically pays during transfers and fails to initialize new recipients correctly.
-Neither snippet implements actual gas sponsorship. Use these only as historical
-algorithm sketches, not implementation specifications.
+Their gas-pool sketches are obsolete under the caller-paid fee model. Use these
+only as historical algorithm sketches, not implementation specifications.
 
 ### A. Sui Move Implementation (`project_registry.move`)
 
@@ -370,16 +379,8 @@ contract ProjectRegistry is ERC1155, ReentrancyGuard {
 
 ---
 
-## 4. Unverified Historical Cost Estimates
+## 4. Cost Evidence
 
-These figures are not measured acceptance criteria. Benchmark the implemented
-contracts, including multi-asset accounting, fees, and sponsorship, on each chain.
-
-| Operational Dimension | Sui (Move L1) | opBNB (EVM L2) | Base (EVM L2) |
-| :--- | :--- | :--- | :--- |
-| **Average Write Fee** | ~\$0.00005 – \$0.00037 | ~\$0.00003 | ~\$0.001 – \$0.01 |
-| **Storage Cost Model** | One-time storage fee to Storage Fund with **partial rebate** on object deletion/burn | Permanent L1 data availability rollup cost | L1 data availability fee (EIP-4844 blobs) |
-| **End-User Read Cost** | \$0.00 (Standard RPC) | \$0.00 (Standard RPC) | \$0.00 (Standard RPC) |
-| **dApp RPC Sourcing** | 1:1 Request Units or Flat RPS | Flat 1:1 Request Units (Dwellir / blockmachine) | Flat 1:1 Request Units (Dwellir) |
-| **Sponsoring Mechanics** | Native Sponsored Transactions | ERC-4337 Paymaster | ERC-4337 Paymaster |
-| **Cost per 10,000 Mints** | ~\$0.50 – \$3.70 | ~\$0.30 | ~\$10.00 – \$50.00 |
+Earlier dollar estimates were not measured and are withdrawn. Current local EVM
+gas measurements are in [contracts.md](contracts.md); real network fees and Sui
+costs still require funded testnet measurements.

@@ -1,6 +1,6 @@
 module trophies::registry;
 
-use std::string::String;
+use std::string::{Self, String};
 use std::type_name::{Self, TypeName};
 use sui::balance::{Self, Balance};
 use sui::coin::{Self, Coin};
@@ -17,12 +17,14 @@ const EPaused: u64 = 1;
 const EAmount: u64 = 2;
 const EAsset: u64 = 3;
 const ERecipient: u64 = 4;
+const EReference: u64 = 5;
 const SHARE_UNIT: u128 = 1_000_000_000_000_000_000;
 const SCALE: u256 = 1_000_000_000_000_000_000_000_000_000_000_000_000;
 
 public struct Registry has key {
     id: UID,
     owner: address,
+    pending_owner: address,
     operations_paused: bool,
     withdrawals_paused: bool,
 }
@@ -30,6 +32,7 @@ public struct Registry has key {
 public struct Project has key {
     id: UID,
     manager: address,
+    pending_manager: address,
     registry_id: ID,
     supply: u128,
     manager_paused: bool,
@@ -38,6 +41,7 @@ public struct Project has key {
     rewards: vector<Reward>,
     asset_indexes: Table<TypeName, u64>,
     holders: Table<address, Holder>,
+    references: Table<String, bool>,
 }
 
 public struct Reward has store, drop {
@@ -80,22 +84,34 @@ public struct OwnerPauseChanged has copy, drop {
     project_id: ID, operations: bool, withdrawals: bool,
 }
 public struct GlobalPauseChanged has copy, drop { operations: bool, withdrawals: bool }
+public struct ManagerTransferStarted has copy, drop {
+    project_id: ID, manager: address, nominee: address,
+}
+public struct ManagerTransferCancelled has copy, drop { project_id: ID, manager: address }
+public struct ManagerTransferred has copy, drop {
+    project_id: ID, previous_manager: address, new_manager: address,
+}
+public struct OwnerTransferStarted has copy, drop { owner: address, nominee: address }
+public struct OwnerTransferCancelled has copy, drop { owner: address }
+public struct OwnerTransferred has copy, drop { previous_owner: address, new_owner: address }
 
 fun init(ctx: &mut TxContext) {
     transfer::share_object(new_registry(ctx));
 }
 
 fun new_registry(ctx: &mut TxContext): Registry {
-    Registry { id: object::new(ctx), owner: ctx.sender(), operations_paused: false,
+    Registry { id: object::new(ctx), owner: ctx.sender(), pending_owner: @0x0, operations_paused: false,
         withdrawals_paused: false }
 }
 
 fun new_project(registry: &Registry, ctx: &mut TxContext): Project {
     assert!(!registry.operations_paused, EPaused);
     let mut project = Project {
-        id: object::new(ctx), manager: ctx.sender(), registry_id: object::id(registry),
+        id: object::new(ctx), manager: ctx.sender(), pending_manager: @0x0,
+        registry_id: object::id(registry),
         supply: 0, manager_paused: false, owner_paused: false, withdrawals_paused: false,
         rewards: vector[], asset_indexes: table::new(ctx), holders: table::new(ctx),
+        references: table::new(ctx),
     };
     add_asset<SUI>(&mut project);
     event::emit(ProjectRegistered { project_id: object::id(&project), manager: project.manager });
@@ -110,6 +126,54 @@ public fun enable_asset<T>(registry: &Registry, project: &mut Project, ctx: &TxC
     assert!(ctx.sender() == project.manager, EUnauthorized);
     require_active(registry, project);
     add_asset<T>(project);
+}
+
+public fun nominate_manager(project: &mut Project, nominee: address, ctx: &TxContext) {
+    assert!(ctx.sender() == project.manager, EUnauthorized);
+    assert!(nominee != @0x0 && nominee != object::id_address(project)
+        && nominee != project.manager, ERecipient);
+    project.pending_manager = nominee;
+    event::emit(ManagerTransferStarted {
+        project_id: object::id(project), manager: ctx.sender(), nominee,
+    });
+}
+
+public fun cancel_manager_nomination(project: &mut Project, ctx: &TxContext) {
+    assert!(ctx.sender() == project.manager, EUnauthorized);
+    project.pending_manager = @0x0;
+    event::emit(ManagerTransferCancelled { project_id: object::id(project), manager: ctx.sender() });
+}
+
+public fun accept_manager(project: &mut Project, ctx: &TxContext) {
+    assert!(ctx.sender() == project.pending_manager && project.pending_manager != @0x0, EUnauthorized);
+    let previous = project.manager;
+    project.manager = ctx.sender();
+    project.pending_manager = @0x0;
+    event::emit(ManagerTransferred {
+        project_id: object::id(project), previous_manager: previous, new_manager: ctx.sender(),
+    });
+}
+
+public fun nominate_owner(registry: &mut Registry, nominee: address, ctx: &TxContext) {
+    assert!(ctx.sender() == registry.owner, EUnauthorized);
+    assert!(nominee != @0x0 && nominee != object::id_address(registry)
+        && nominee != registry.owner, ERecipient);
+    registry.pending_owner = nominee;
+    event::emit(OwnerTransferStarted { owner: ctx.sender(), nominee });
+}
+
+public fun cancel_owner_nomination(registry: &mut Registry, ctx: &TxContext) {
+    assert!(ctx.sender() == registry.owner, EUnauthorized);
+    registry.pending_owner = @0x0;
+    event::emit(OwnerTransferCancelled { owner: ctx.sender() });
+}
+
+public fun accept_owner(registry: &mut Registry, ctx: &TxContext) {
+    assert!(ctx.sender() == registry.pending_owner && registry.pending_owner != @0x0, EUnauthorized);
+    let previous = registry.owner;
+    registry.owner = ctx.sender();
+    registry.pending_owner = @0x0;
+    event::emit(OwnerTransferred { previous_owner: previous, new_owner: ctx.sender() });
 }
 
 fun add_asset<T>(project: &mut Project) {
@@ -129,6 +193,10 @@ public fun mint(registry: &Registry, project: &mut Project, recipient: address,
     require_active(registry, project);
     assert!(quantity > 0, EAmount);
     assert!(recipient != @0x0 && recipient != object::id_address(project), ERecipient);
+    if (!string::is_empty(&external_reference)) {
+        assert!(!project.references.contains(external_reference), EReference);
+        project.references.add(external_reference, true);
+    };
     settle(project, recipient);
     project.supply = project.supply + quantity;
     let holder = project.holders.borrow_mut(recipient);
@@ -272,6 +340,13 @@ fun require_withdrawals(registry: &Registry, project: &Project) {
 }
 
 public fun share_unit(): u128 { SHARE_UNIT }
+public fun manager(project: &Project): address { project.manager }
+public fun pending_manager(project: &Project): address { project.pending_manager }
+public fun used_reference(project: &Project, reference: String): bool {
+    project.references.contains(reference)
+}
+public fun owner(registry: &Registry): address { registry.owner }
+public fun pending_owner(registry: &Registry): address { registry.pending_owner }
 public fun total_supply(project: &Project): u128 { project.supply }
 public fun balance_of(project: &Project, holder: address): u128 {
     if (project.holders.contains(holder)) project.holders.borrow(holder).shares else 0

@@ -16,9 +16,219 @@ const UNIT: u128 = 1_000_000_000_000_000_000;
 
 public struct TEST has drop {}
 
+#[test]
+#[expected_failure(abort_code = 5, location = trophies::registry)]
+fun duplicate_generation_reference_rejected() {
+    let mut scenario = test_scenario::begin(MANAGER);
+    let r = registry::new_registry_for_testing(scenario.ctx());
+    let mut p = registry::new_project_for_testing(&r, scenario.ctx());
+    registry::mint(&r, &mut p, ALICE, UNIT, string::utf8(b"work"), string::utf8(b"github:42"), scenario.ctx());
+    assert!(registry::used_reference(&p, string::utf8(b"github:42")));
+    registry::mint(&r, &mut p, BOB, UNIT, string::utf8(b"other"), string::utf8(b"github:42"), scenario.ctx());
+    registry::share_project_for_testing(p); registry::share_registry_for_testing(r); scenario.end();
+}
+
 fun assert_entitlement<T>(p: &registry::Project, holder: address, expected: u256) {
     let (amount, remainder) = registry::entitlement<T>(p, holder);
     assert!(amount == expected && remainder == 0);
+}
+
+#[test]
+fun manager_held_issuance_and_handoff_preserve_custody_credit() {
+    let mut scenario = test_scenario::begin(MANAGER);
+    let r = registry::new_registry_for_testing(scenario.ctx());
+    let mut p = registry::new_project_for_testing(&r, scenario.ctx());
+    registry::mint(&r, &mut p, MANAGER, UNIT, string::utf8(b"work"), string::utf8(b"ref"), scenario.ctx());
+    registry::donate(&r, &mut p, coin::mint_for_testing<SUI>(20_000, scenario.ctx()), scenario.ctx());
+    registry::set_manager_pause(&mut p, true, scenario.ctx());
+    registry::nominate_manager(&mut p, ALICE, scenario.ctx());
+    assert!(registry::manager(&p) == MANAGER && registry::pending_manager(&p) == ALICE);
+    registry::share_project_for_testing(p); registry::share_registry_for_testing(r);
+    scenario.next_tx(ALICE);
+    let r = scenario.take_shared<registry::Registry>();
+    let mut p = scenario.take_shared<registry::Project>();
+    registry::accept_manager(&mut p, scenario.ctx());
+    assert!(registry::manager(&p) == ALICE && registry::pending_manager(&p) == @0x0);
+    registry::set_manager_pause(&mut p, false, scenario.ctx());
+    assert_entitlement<SUI>(&p, MANAGER, 19_900);
+    test_scenario::return_shared(p); test_scenario::return_shared(r);
+    scenario.next_tx(MANAGER);
+    let r = scenario.take_shared<registry::Registry>();
+    let mut p = scenario.take_shared<registry::Project>();
+    registry::transfer_shares(&r, &mut p, BOB, UNIT, scenario.ctx());
+    assert!(registry::balance_of(&p, MANAGER) == 0 && registry::balance_of(&p, BOB) == UNIT);
+    assert_entitlement<SUI>(&p, MANAGER, 19_900);
+    assert_entitlement<SUI>(&p, BOB, 0);
+    registry::donate(&r, &mut p, coin::mint_for_testing<SUI>(20_000, scenario.ctx()), scenario.ctx());
+    assert_entitlement<SUI>(&p, BOB, 19_900);
+    assert_entitlement<SUI>(&p, MANAGER, 19_900);
+    test_scenario::return_shared(p); test_scenario::return_shared(r); scenario.end();
+}
+
+#[test]
+fun manager_nomination_can_be_replaced_and_cancelled() {
+    let mut scenario = test_scenario::begin(MANAGER);
+    let r = registry::new_registry_for_testing(scenario.ctx());
+    let mut p = registry::new_project_for_testing(&r, scenario.ctx());
+    registry::nominate_manager(&mut p, ALICE, scenario.ctx());
+    registry::nominate_manager(&mut p, BOB, scenario.ctx());
+    assert!(registry::pending_manager(&p) == BOB);
+    registry::cancel_manager_nomination(&mut p, scenario.ctx());
+    assert!(registry::pending_manager(&p) == @0x0 && registry::manager(&p) == MANAGER);
+    registry::share_project_for_testing(p); registry::share_registry_for_testing(r); scenario.end();
+}
+
+#[test]
+fun owner_handoff_preserves_pauses_and_uncollected_fees() {
+    let mut scenario = test_scenario::begin(OWNER);
+    let r = registry::new_registry_for_testing(scenario.ctx());
+    registry::share_registry_for_testing(r);
+    scenario.next_tx(MANAGER);
+    let r = scenario.take_shared<registry::Registry>();
+    let mut p = registry::new_project_for_testing(&r, scenario.ctx());
+    registry::mint(&r, &mut p, ALICE, UNIT, string::utf8(b""), string::utf8(b""), scenario.ctx());
+    registry::donate(&r, &mut p, coin::mint_for_testing<SUI>(20_000, scenario.ctx()), scenario.ctx());
+    registry::share_project_for_testing(p); test_scenario::return_shared(r);
+    scenario.next_tx(OWNER);
+    let mut r = scenario.take_shared<registry::Registry>();
+    registry::set_global_pause(&mut r, true, true, scenario.ctx());
+    registry::nominate_owner(&mut r, ALICE, scenario.ctx());
+    registry::cancel_owner_nomination(&mut r, scenario.ctx());
+    assert!(registry::pending_owner(&r) == @0x0);
+    registry::nominate_owner(&mut r, BOB, scenario.ctx());
+    assert!(registry::owner(&r) == OWNER && registry::pending_owner(&r) == BOB);
+    test_scenario::return_shared(r);
+    scenario.next_tx(BOB);
+    let mut r = scenario.take_shared<registry::Registry>();
+    let mut p = scenario.take_shared<registry::Project>();
+    registry::accept_owner(&mut r, scenario.ctx());
+    assert!(registry::owner(&r) == BOB && registry::pending_owner(&r) == @0x0);
+    registry::set_global_pause(&mut r, false, false, scenario.ctx());
+    assert!(registry::collect_fees<SUI>(&r, &mut p, scenario.ctx()) == 100);
+    assert_entitlement<SUI>(&p, ALICE, 19_900);
+    test_scenario::return_shared(p); test_scenario::return_shared(r); scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = 4, location = trophies::registry)]
+fun manager_nomination_rejects_zero() {
+    let mut scenario = test_scenario::begin(MANAGER);
+    let r = registry::new_registry_for_testing(scenario.ctx());
+    let mut p = registry::new_project_for_testing(&r, scenario.ctx());
+    registry::nominate_manager(&mut p, @0x0, scenario.ctx());
+    registry::share_project_for_testing(p); registry::share_registry_for_testing(r); scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = 0, location = trophies::registry)]
+fun only_manager_nominee_can_accept() {
+    let mut scenario = test_scenario::begin(MANAGER);
+    let r = registry::new_registry_for_testing(scenario.ctx());
+    let mut p = registry::new_project_for_testing(&r, scenario.ctx());
+    registry::nominate_manager(&mut p, ALICE, scenario.ctx());
+    registry::share_project_for_testing(p); registry::share_registry_for_testing(r);
+    scenario.next_tx(BOB);
+    let mut p = scenario.take_shared<registry::Project>();
+    registry::accept_manager(&mut p, scenario.ctx());
+    test_scenario::return_shared(p); scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = 0, location = trophies::registry)]
+fun only_owner_nominee_can_accept() {
+    let mut scenario = test_scenario::begin(OWNER);
+    let mut r = registry::new_registry_for_testing(scenario.ctx());
+    registry::nominate_owner(&mut r, ALICE, scenario.ctx());
+    registry::share_registry_for_testing(r);
+    scenario.next_tx(BOB);
+    let mut r = scenario.take_shared<registry::Registry>();
+    registry::accept_owner(&mut r, scenario.ctx());
+    test_scenario::return_shared(r); scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = 0, location = trophies::registry)]
+fun cancelled_manager_nominee_cannot_accept() {
+    let mut scenario = test_scenario::begin(MANAGER);
+    let r = registry::new_registry_for_testing(scenario.ctx());
+    let mut p = registry::new_project_for_testing(&r, scenario.ctx());
+    registry::nominate_manager(&mut p, ALICE, scenario.ctx());
+    registry::cancel_manager_nomination(&mut p, scenario.ctx());
+    registry::share_project_for_testing(p); registry::share_registry_for_testing(r);
+    scenario.next_tx(ALICE);
+    let mut p = scenario.take_shared<registry::Project>();
+    registry::accept_manager(&mut p, scenario.ctx());
+    test_scenario::return_shared(p); scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = 0, location = trophies::registry)]
+fun former_manager_cannot_mint_after_handoff() {
+    let mut scenario = test_scenario::begin(MANAGER);
+    let r = registry::new_registry_for_testing(scenario.ctx());
+    let mut p = registry::new_project_for_testing(&r, scenario.ctx());
+    registry::nominate_manager(&mut p, ALICE, scenario.ctx());
+    registry::share_project_for_testing(p); registry::share_registry_for_testing(r);
+    scenario.next_tx(ALICE);
+    let mut p = scenario.take_shared<registry::Project>();
+    registry::accept_manager(&mut p, scenario.ctx());
+    test_scenario::return_shared(p);
+    scenario.next_tx(MANAGER);
+    let r = scenario.take_shared<registry::Registry>();
+    let mut p = scenario.take_shared<registry::Project>();
+    registry::mint(&r, &mut p, BOB, UNIT, string::utf8(b""), string::utf8(b""), scenario.ctx());
+    test_scenario::return_shared(p); test_scenario::return_shared(r); scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = 4, location = trophies::registry)]
+fun owner_nomination_rejects_zero() {
+    let mut scenario = test_scenario::begin(OWNER);
+    let mut r = registry::new_registry_for_testing(scenario.ctx());
+    registry::nominate_owner(&mut r, @0x0, scenario.ctx());
+    registry::share_registry_for_testing(r); scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = 0, location = trophies::registry)]
+fun nonmanager_cannot_nominate_manager() {
+    let mut scenario = test_scenario::begin(MANAGER);
+    let r = registry::new_registry_for_testing(scenario.ctx());
+    let p = registry::new_project_for_testing(&r, scenario.ctx());
+    registry::share_project_for_testing(p); registry::share_registry_for_testing(r);
+    scenario.next_tx(BOB);
+    let mut p = scenario.take_shared<registry::Project>();
+    registry::nominate_manager(&mut p, ALICE, scenario.ctx());
+    test_scenario::return_shared(p); scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = 0, location = trophies::registry)]
+fun nonowner_cannot_nominate_owner() {
+    let mut scenario = test_scenario::begin(OWNER);
+    let r = registry::new_registry_for_testing(scenario.ctx());
+    registry::share_registry_for_testing(r);
+    scenario.next_tx(BOB);
+    let mut r = scenario.take_shared<registry::Registry>();
+    registry::nominate_owner(&mut r, ALICE, scenario.ctx());
+    test_scenario::return_shared(r); scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = 0, location = trophies::registry)]
+fun former_owner_cannot_change_pause_after_handoff() {
+    let mut scenario = test_scenario::begin(OWNER);
+    let mut r = registry::new_registry_for_testing(scenario.ctx());
+    registry::nominate_owner(&mut r, BOB, scenario.ctx());
+    registry::share_registry_for_testing(r);
+    scenario.next_tx(BOB);
+    let mut r = scenario.take_shared<registry::Registry>();
+    registry::accept_owner(&mut r, scenario.ctx());
+    test_scenario::return_shared(r);
+    scenario.next_tx(OWNER);
+    let mut r = scenario.take_shared<registry::Registry>();
+    registry::set_global_pause(&mut r, true, true, scenario.ctx());
+    test_scenario::return_shared(r); scenario.end();
 }
 
 #[test]
