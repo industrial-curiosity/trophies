@@ -2,7 +2,7 @@
 
 This guide covers the implemented contracts, deploying them yourself, checking
 their behavior with wallets, and replacing a deployment after a defect. Commands
-run from `/Users/adamfisher/dev/trophies` unless stated otherwise. Toolchains stay
+run from the repository root unless stated otherwise. Toolchains stay
 inside Docker. Deployment commands spend testnet funds and publish permanent
 public records; they have not been executed as part of writing this guide.
 
@@ -23,6 +23,130 @@ pays its own gas.
 After recording a test contribution, use the [manager-signed mint workflow](mint-automation.md)
 to exercise automated issuance. Configure the manager secret and deployment
 identifiers first; the workflow has not yet been executed with funded wallets.
+
+## Interactive testnet deployment
+
+Run `npm run testnet:deploy` from the repository root. The script
+locates the repository from its own file, prompts for the testnet and RPC choice,
+the amount of native currency to fund each disposable test wallet, the donation
+amount, an optional second ERC-20 address or Sui coin type T
+(`0x...::module::TOKEN`) and amount, and one
+dedicated, funded testnet owner private key. The owner must already hold the
+optional token on that testnet. Enter the key at the
+hidden terminal prompt; it is not placed in arguments, logs, or the checkpoint.
+If you choose a custom HTTPS RPC, its URL is also entered at a hidden prompt
+and only a digest of it is saved in the checkpoint.
+Use a testnet-only key. The script derives manager, Alice, and Bob test wallets
+from it and keeps their keys in memory. Enter the same owner key to resume the
+same run.
+
+After collecting inputs, the script runs the selected chain's local suite. For
+EVM it compiles with the pinned Foundry container, deploys, funds the test
+wallets, registers a project, mints one trophy each, donates twice, transfers,
+claims, collects fees, checks balances and authorization, exercises pause controls,
+and hands both roles away and back. If you supply a second asset, it also enables,
+funds, donates, claims, and collects fees for that asset. For Sui it builds
+with the pinned Sui container, publishes and consumes the UpgradeCap in one
+transaction, then runs the same native SUI sequence. It records public transaction
+references under ignored `.tool-cache/testnet/runs/` after each step and writes
+the successful registry ID into `deployments/networks.json`. The owner pays publication
+and funding gas and funds three wallets; each wallet pays gas for its own actions,
+and the manager makes two donations. The script displays
+the planned funding and donation amounts before its final RUN prompt. No added
+service charge is required; network gas and any RPC provider charge still apply.
+
+The run stops on an uncertain transaction and leaves its checkpoint for inspection
+so a retry cannot silently create a second deployment or donation. This automated
+smoke run always covers the native asset. If you leave the second asset blank,
+its compatibility check remains undone. Explorer source verification and
+independent security review in
+this guide remain separate release checks. The Sui bytecode-export path has not
+been verified with a funded deployment; the pinned container currently fails to
+fetch `MoveStdlib` for that export and stops before spending funds. Resolve that
+dependency access before attempting Sui publication.
+
+## Immutable release process: from testnet iterations to mainnet
+
+Each contract iteration is a fresh deployment with its own address or package and
+independent state. Testnet projects and tokens are disposable; mainnet starts
+with new projects rather than importing testnet holdings. Successful tests and an
+independent audit reduce risk but cannot guarantee that the release has no bugs.
+Evidence must identify the exact code and configuration being released.
+
+1. **Define acceptance criteria before testing.** Cover manager-only minting,
+   missing-wallet delivery to the manager, the 0.5% fee, retained seller earnings,
+   no historical rewards for new shares, project/asset isolation, and emergency
+   permissions. Calculate expected results independently of the contract's own
+   calculations. Include the eventual transfer of manager-held contributor shares.
+2. **Verify locally.** Run both contract suites, regression tests, accounting
+   boundary checks and randomized transaction sequences. Include unauthorized
+   calls, invalid quantities, failed payouts, fractional credits, fee remainders,
+   donation dust and conservation across multiple projects/assets. Verify mint
+   workflow validation and retry handling before granting it signing credentials.
+3. **Deploy iteration A to all three testnets.** Use Base Sepolia, opBNB Testnet
+   and Sui Testnet, record the exact source/build and deployed identifiers, and
+   confirm the deployment matches them. Reproduce the intended immutable
+   architecture, including relinquishing Sui UpgradeCap. Seed disposable projects
+   and exercise the full lifecycle with separate wallets, native currency and
+   supported additional assets. Include a real merged trophy file processed by
+   GitHub Actions, later delivery, donations, transfers, claims, fees, pauses and
+   authority handoffs. Record actual gas, expected results and transaction evidence.
+4. **Fix defects and deploy iteration B.** Preserve A's evidence, reproduce the
+   defect with a failing regression test, fix it, and rerun local checks. Publish
+   B as a new instance and recreate its test state. Repeat the failing case and
+   complete release scenario. Mark A superseded only when choosing B as the
+   replacement; never overwrite the historical record. An RPC-only correction
+   needs reconciliation/retry, not necessarily a new contract. See the
+   [replacement procedure](#replacing-an-immutable-deployment-after-a-code-fix).
+5. **Freeze a release candidate and obtain independent review.** Pin its source
+   revision, compiler/settings, dependency versions, build artifacts and hashes,
+   deployment scripts and intended configuration. Have Solidity, Move, accounting,
+   permissions and signing/deployment paths reviewed. Resolve findings with
+   evidence. A source, dependency, compiler or relevant configuration change
+   creates a revised candidate requiring affected checks and the complete final
+   release scenario again; passing results for an older candidate are insufficient.
+6. **Rehearse the mainnet procedure.** From a clean environment, reproduce the
+   candidate and run the complete deployment/test sequence on all three testnets.
+   Use the intended custody and permission arrangement with distinct test keys.
+   Verify target chain IDs, owner addresses, dependencies, RPC configuration and
+   gas requirements. Use mainnet forks or simulation where available to check
+   actual supported assets; mock-token success does not establish mainnet token
+   compatibility. Document gaps and unsupported asset behavior explicitly.
+7. **Deploy and verify mainnet one network at a time.** Mainnet broadcasting
+   requires its separate release authorization. Deploy the frozen candidate,
+   verify source/build correspondence and initial configuration, and record
+   actual owner/deployment identities. Account explicitly for network-specific
+   dependency addresses and deployment inputs rather than assuming every byte is
+   identical across chains. Verify the absence of an EVM upgrade path and the Sui
+   immutability transaction. Use a small amount of real funds to exercise the full
+   lifecycle before promoting public use. Public deployment itself is accessible
+   to others; delayed promotion is not an on-chain access restriction.
+8. **Monitor and retain incident procedures.** Check transaction failures, mint
+   results, gas funding, custody and claim behavior. Exercise the intended pause
+   procedure before launch. Pausing can contain a problem but cannot repair code
+   or recover funds already lost. An immutable mainnet defect can require a new
+   deployment and a separately designed migration; no automatic migration exists.
+
+These gates follow the distinction between testing, audit and deployed-source
+verification in [OpenZeppelin's mainnet guidance](https://docs.openzeppelin.com/contracts/5.x/learn/preparing-for-mainnet),
+and the final rehearsal, deployment verification and small-value exercise in
+[Sui's production-readiness guidance](https://docs.sui.io/develop/production-readiness).
+
+Retain a release report per candidate with each gate marked passed, failed, or
+not yet verified, plus the matching source/build/configuration and evidence links.
+Unresolved failures or missing required evidence block release readiness. Include
+review findings and their disposition; a report is not an audit or proof of safety.
+
+The current `npm run testnet:deploy` runner implements part of this process: an
+interactive deployment, selected local tests, scripted testnet exercises and
+transaction checkpoints. It does not provide guided replacement, a complete
+release report, mainnet deployment, or the funded GitHub workflow test. It refuses
+an existing different deployment ID or a checkpoint from changed source. Preserve
+and inspect those records before preparing a fresh iteration; do not delete them
+blindly to bypass an uncertain transaction. The Sui export blocker described above,
+funded end-to-end verification and independent review remain outstanding. Fully
+automating iteration management and release reports is future work, not behavior
+provided by documenting this process.
 
 ## Where to look and what to check
 
@@ -171,8 +295,8 @@ environment variables or offer an interactive keystore mount. Define this tempor
 shell function in your own terminal instead. It uses the same pinned image:
 
 ```bash
-cd /Users/adamfisher/dev/trophies
-TROPHIES_ROOT="$PWD"
+TROPHIES_ROOT="$(git rev-parse --show-toplevel)"
+cd "$TROPHIES_ROOT"
 TROPHIES_FOUNDRY='ghcr.io/foundry-rs/foundry@sha256:32c8ea9ef052a440cb1620175987a3f49eff8b068a0c6a3d09ebf7f5f9a0e043'
 mkdir -p .tool-cache/testnet/evm
 chmod 700 .tool-cache/testnet/evm

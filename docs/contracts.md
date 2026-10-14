@@ -114,8 +114,9 @@ network until its deployment identifiers and manager credential are configured.
 
 ## Deployment procedure
 
-Use the [testnet walkthrough](testnet-guide.md) for container commands, faucet
-links, wallet exercises with expected results, and replacement deployments.
+Use `npm run testnet:deploy` for the interactive deployment and native-asset smoke
+run. The [testnet walkthrough](testnet-guide.md) covers its inputs, remaining
+manual checks, faucet links, and replacement deployments.
 
 1. Run both container test suites, review dependency advisories, inspect compiler
    diagnostics, and complete independent security review. Stop on unexplained failures.

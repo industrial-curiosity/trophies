@@ -7,7 +7,9 @@
   },
   "scripts": {
     "test:mint": "node --test tests/mint-contribution.test.mjs",
-    "mint": "node scripts/mint-contribution.mjs"
+    "test:testnet": "node --test tests/testnet-deploy.test.mjs",
+    "mint": "node scripts/mint-contribution.mjs",
+    "testnet:deploy": "node scripts/testnet-deploy.mjs"
   },
   "dependencies": {
     "@mysten/sui": "2.35.0",

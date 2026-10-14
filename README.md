@@ -9,6 +9,10 @@ The platform fee is 0.5% in the donation asset.
 The implementation is under active verification. Local tests do not constitute
 an audit or mainnet readiness. No network deployment has been performed.
 
+Contract fixes require fresh deployments. Follow the
+[immutable release process](docs/testnet-guide.md#immutable-release-process-from-testnet-iterations-to-mainnet)
+for testnet iterations, release-candidate verification, and mainnet launch gates.
+
 ## Development
 
 Use Docker; no host Solidity or Move compiler is required. The wrapper pins
@@ -22,6 +26,11 @@ scripts/contracts.sh test
 scripts/contracts.sh evm fmt --check
 scripts/contracts.sh sui move build
 ```
+
+For an interactive testnet deployment and native-currency smoke run, use
+`npm run testnet:deploy`. It prompts for the selected testnet, RPC, disposable
+wallet funding, donation amount, and a dedicated testnet owner key. See the
+[testnet guide](docs/testnet-guide.md) for its coverage and limits.
 
 Builds use ignored local caches. The Move build configuration is keyless and
 uses a dummy local RPC endpoint; tests do not access funded wallets or live

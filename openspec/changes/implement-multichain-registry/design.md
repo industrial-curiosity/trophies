@@ -75,6 +75,11 @@ Use Docker for both toolchains; no host tool installation is authorized. Pin Fou
 
 No stored data exists to migrate. Verify locally, then deploy and exercise independently on Base Sepolia, opBNB Testnet, and Sui Testnet. Preserve network-specific deployment evidence. Mainnet publication requires a separate release action after readiness checks. Replacement deployments do not automatically move previous balances or liabilities.
 
+Follow the [immutable release process](../../../docs/testnet-guide.md#immutable-release-process-from-testnet-iterations-to-mainnet)
+for fresh testnet iterations, frozen release candidates, independent review,
+deployment verification and small-value mainnet exercises. Passing tests or an
+audit cannot guarantee the absence of defects; retain evidence for the exact release.
+
 ## Open Questions
 
 - Manager signing credentials and funded testnet deployment access; local Docker execution is authorized.

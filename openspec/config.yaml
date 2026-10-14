@@ -24,7 +24,12 @@ context: |
   respecting EVM and Sui differences in ownership, authorization, and execution.
   No cross-chain bridge or synchronized accounting has been requested; treat
   deployment state and assets as network-local unless explicitly specified.
-  Deployments are immutable: no proxy upgrades or retained Sui upgrade authority.
+  Deployments are immutable: no EVM proxy upgrades or retained usable Sui UpgradeCap.
+  Contract fixes require fresh deployments with independent state. Follow the
+  immutable release process in docs/testnet-guide.md: fresh testnet iterations,
+  regression tests, frozen release candidates, independent review, verified
+  mainnet code/configuration and small-value end-to-end checks. No testing or
+  audit process guarantees that a contract is free of defects.
   Build tools, dependency versions, and repository layout remain undecided;
   establish them in the relevant change design.
 
@@ -65,11 +70,10 @@ context: |
     owner controls do not imply authority to confiscate holder funds.
   - Manager and platform-owner authority must support separate two-step handoffs,
     with nominee acceptance and no automatic movement of held shares or credits.
-  - Gasless means sponsored cost to the end user, not zero network cost.
-    Sponsorship requires an actual paymaster or Sui sponsor integration; a
-    contract gas-pool balance alone does not implement sponsorship.
-    Funded sponsorship for minting, transfers, and claims is required in this
-    release on Base, opBNB, and Sui, with project budgets isolated from donations.
+  - The submitting wallet pays gas: manager for registration/minting, donor for
+    donations, holder for claims/transfers, and deployer for contract publication.
+    No gas sponsorship or project gas pool is required. Donations, holder
+    liabilities and platform fees remain separate from gas funding.
 
   Initial implementation choices: manager-enabled assets without a platform
   allowlist, a separate ledger per project/asset, on-chain issuance events, and
@@ -81,8 +85,9 @@ context: |
   Solidity uses ERC-1155 balances; Sui uses project-local address balances rather
   than freely transferable share objects. Transfer/mint work scales with enabled
   asset count. See the active change design and docs/contracts.md for exact behavior.
-  Still requiring implementation and verification: sponsorship funding and budget
-  controls, funded testnet checks, practical cost bounds, and independent security review.
+  Still requiring verification: funded testnet checks, practical cost bounds,
+  and independent security review. Guided testnet replacement and complete
+  release-evidence automation are not implemented by the current runner.
   Define event/transaction ordering precisely; do not assume a block boundary
   alone determines entitlement between operations within the same block.
 
